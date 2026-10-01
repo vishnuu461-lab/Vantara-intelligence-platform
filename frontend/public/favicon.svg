@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" fill="none">
+  <defs>
+    <linearGradient id="g" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%"   stop-color="#0d2b6e"/>
+      <stop offset="60%"  stop-color="#1a5fc8"/>
+      <stop offset="100%" stop-color="#00b4d8"/>
+    </linearGradient>
+    <linearGradient id="gi" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%"   stop-color="#2979e8"/>
+      <stop offset="100%" stop-color="#00d4ff"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Left arm of V -->
+  <polygon points="1,2 7,2 16,22 13,27 2,5" fill="url(#g)"/>
+  <!-- Right arm of V -->
+  <polygon points="31,2 25,2 16,22 19,27 30,5" fill="url(#g)"/>
+
+  <!-- Inner highlight left -->
+  <polygon points="5,2 8,2 16,20 14,24 4,5" fill="url(#gi)" opacity="0.5"/>
+  <!-- Inner highlight right -->
+  <polygon points="27,2 24,2 16,20 18,24 28,5" fill="url(#gi)" opacity="0.5"/>
+
+  <!-- Circuit lines (top-right) -->
+  <line x1="25" y1="4" x2="30" y2="4"  stroke="#00d4ff" stroke-width="1.5" stroke-linecap="round"/>
+  <line x1="24" y1="7" x2="30" y2="7"  stroke="#00d4ff" stroke-width="1.5" stroke-linecap="round"/>
+  <line x1="22" y1="10" x2="30" y2="10" stroke="#00d4ff" stroke-width="1.5" stroke-linecap="round"/>
+
+  <!-- Nodes -->
+  <circle cx="30" cy="4"  r="1.5" fill="#00d4ff"/>
+  <circle cx="30" cy="7"  r="1.5" fill="#00d4ff"/>
+  <circle cx="30" cy="10" r="1.5" fill="#00d4ff"/>
+</svg>

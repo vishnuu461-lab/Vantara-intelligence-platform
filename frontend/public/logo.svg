@@ -1,0 +1,74 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 180" fill="none">
+  <defs>
+    <!-- Deep blue to cyan gradient for the main V -->
+    <linearGradient id="vGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%"   stop-color="#0d2b6e"/>
+      <stop offset="50%"  stop-color="#1a5fc8"/>
+      <stop offset="100%" stop-color="#00b4d8"/>
+    </linearGradient>
+    <!-- Lighter inner V stripe -->
+    <linearGradient id="vInner" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%"   stop-color="#2979e8"/>
+      <stop offset="100%" stop-color="#00d4ff"/>
+    </linearGradient>
+    <!-- Drop shadow filter -->
+    <filter id="shadow" x="-10%" y="-10%" width="130%" height="130%">
+      <feDropShadow dx="2" dy="4" stdDeviation="4" flood-color="#0a1a4a" flood-opacity="0.4"/>
+    </filter>
+  </defs>
+
+  <!-- ── MAIN V (left thick arm) ── -->
+  <polygon
+    points="10,10 45,10 100,130 80,160 20,25"
+    fill="url(#vGrad)"
+    filter="url(#shadow)"
+  />
+
+  <!-- ── MAIN V (right thick arm) ── -->
+  <polygon
+    points="190,10 155,10 100,130 120,160 180,25"
+    fill="url(#vGrad)"
+    filter="url(#shadow)"
+  />
+
+  <!-- ── Inner highlight stripe (left) ── -->
+  <polygon
+    points="34,10 50,10 100,122 85,148 28,28"
+    fill="url(#vInner)"
+    opacity="0.55"
+  />
+
+  <!-- ── Inner highlight stripe (right) ── -->
+  <polygon
+    points="166,10 150,10 100,122 115,148 172,28"
+    fill="url(#vInner)"
+    opacity="0.55"
+  />
+
+  <!-- ── CIRCUIT LINES (top-right) ── -->
+  <!-- Main trunk going up-right from right arm top -->
+  <line x1="162" y1="22" x2="185" y2="22" stroke="#00d4ff" stroke-width="3" stroke-linecap="round"/>
+  <line x1="185" y1="22" x2="195" y2="12"  stroke="#00d4ff" stroke-width="3" stroke-linecap="round"/>
+
+  <!-- Upper branch -->
+  <line x1="185" y1="22" x2="195" y2="22" stroke="#00d4ff" stroke-width="3" stroke-linecap="round"/>
+
+  <!-- Middle branch -->
+  <line x1="162" y1="38" x2="178" y2="38" stroke="#00d4ff" stroke-width="3" stroke-linecap="round"/>
+  <line x1="178" y1="38" x2="188" y2="28" stroke="#00d4ff" stroke-width="3" stroke-linecap="round"/>
+  <line x1="188" y1="28" x2="198" y2="28" stroke="#00d4ff" stroke-width="3" stroke-linecap="round"/>
+
+  <!-- Lower branch -->
+  <line x1="155" y1="52" x2="172" y2="52" stroke="#00d4ff" stroke-width="3" stroke-linecap="round"/>
+  <line x1="172" y1="52" x2="182" y2="42" stroke="#00d4ff" stroke-width="3" stroke-linecap="round"/>
+  <line x1="182" y1="42" x2="198" y2="42" stroke="#00d4ff" stroke-width="3" stroke-linecap="round"/>
+
+  <!-- ── Circuit nodes (filled circles) ── -->
+  <circle cx="195" cy="12"  r="4.5" fill="#00d4ff"/>
+  <circle cx="198" cy="28"  r="4.5" fill="#00d4ff"/>
+  <circle cx="198" cy="42"  r="4.5" fill="#00d4ff"/>
+  <!-- Inline nodes along lines -->
+  <circle cx="185" cy="22"  r="3"   fill="#00d4ff"/>
+  <circle cx="178" cy="38"  r="3"   fill="#00d4ff"/>
+  <circle cx="172" cy="52"  r="3"   fill="#00d4ff"/>
+</svg>

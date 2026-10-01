@@ -1,0 +1,45 @@
+# ============================================================
+# Vantara – .gitignore
+# ============================================================
+# This file tells Git which files/folders to IGNORE.
+# We don't want to accidentally push secrets or unnecessary
+# files to GitHub.
+# ============================================================
+
+# --- Virtual Environment (don't push this to GitHub) ---
+venv/
+env/
+.venv/
+
+# --- Environment Variables (NEVER push this!) ---
+.env
+
+# --- Python Cache Files (auto-generated, not needed) ---
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# --- Machine Learning Models (large files, regenerable) ---
+ml/models/*.pkl
+ml/models/*.joblib
+
+# --- Database Files ---
+*.db
+*.sqlite3
+
+# --- Upload Temp Files ---
+uploads/
+
+# --- IDE / Editor Files ---
+.vscode/
+.idea/
+*.swp
+
+# --- OS Files ---
+.DS_Store
+Thumbs.db
+
+# --- Logs ---
+*.log
+logs/

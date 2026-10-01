@@ -1,0 +1,9 @@
+customer_id,name,age,gender,location,email,total_orders,total_spend,average_order_value,last_purchase_date,website_visits,complaints,subscription_status
+C1021,Rohan Malhotra,29,Male,Chandigarh,rohan.malhotra@email.com,8,18500,2312.5,2024-11-10,35,0,Active
+C1022,Divya Krishnan,24,Female,Chennai,divya.krishnan@email.com,15,42000,2800,2024-12-01,78,1,Premium
+C1023,Sunil Mehta,41,M,Jaipur,sunil.mehta@email.com,3,6500,2166.67,2024-08-15,12,0,Active
+C1024,Anita Desai,33,Female,Pune,anita.desai@email.com,0,0,,, 0,0,Active
+C1025,Manoj Kumar,55,Male,Delhi,manoj.kumar@email.com,22,78000,3545.45,2024-10-20,95,2,Inactive
+C1026,Pritha Roy,27,Female,Kolkata,pritha.roy@email.com,11,29700,2700,2024-12-10,50,0,Active
+C1027,Aryan Shah,,Male,Mumbai,,6,14400,2400,2024-09-05,25,1,active
+C1028,,,,,,,,,,,, 
