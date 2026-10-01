@@ -1,0 +1,62 @@
+version: "3.9"
+
+services:
+  # ── MySQL Database ─────────────────────────────────────
+  db:
+    image: mysql:8.0
+    container_name: vantara_db
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD}
+      MYSQL_DATABASE:      ${DB_NAME}
+      MYSQL_USER:          ${DB_USER}
+      MYSQL_PASSWORD:      ${DB_PASSWORD}
+    ports:
+      - "3306:3306"
+    volumes:
+      - vantara_db_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── Flask Backend ──────────────────────────────────────
+  backend:
+    build: .
+    container_name: vantara_backend
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DB_HOST:     db
+      DB_PORT:     3306
+      DB_NAME:     ${DB_NAME}
+      DB_USER:     ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      SECRET_KEY:  ${SECRET_KEY}
+      FLASK_ENV:   production
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./ml/models:/app/ml/models   # Persist trained model files
+      - ./ml/experiment_log.json:/app/ml/experiment_log.json
+
+  # ── React Frontend (production build) ─────────────────
+  frontend:
+    image: node:20-alpine
+    container_name: vantara_frontend
+    working_dir: /app
+    volumes:
+      - ./frontend:/app
+    command: sh -c "npm install && npm run build && npx serve -s dist -l 5175"
+    ports:
+      - "5175:5175"
+    environment:
+      VITE_API_URL: http://backend:5000
+    depends_on:
+      - backend
+
+volumes:
+  vantara_db_data:

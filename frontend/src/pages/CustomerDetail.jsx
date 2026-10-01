@@ -1,13 +1,13 @@
 // ============================================================
 // CustomerDetail.jsx — Full AI-powered customer profile
 // ============================================================
-// Calls 2 APIs in parallel:
+// Calls APIs in parallel:
 //   1. GET /api/customers/:id          → profile + purchases
 //   2. GET /api/customers/:id/insights → full AI report
-//      (insights already contains churn, clv, segment, behavior)
-//
-// Promise.all() runs both calls simultaneously — faster than
-// calling them one by one.
+//   3. GET /api/customers/:id/explain/shap  → SHAP explanation
+//   4. GET /api/customers/:id/next-purchase → next purchase pred
+//   5. GET /api/customers/:id/recommend    → product recommendations
+//   6. GET /api/customers/:id/anomaly      → anomaly score
 // ============================================================
 
 import { useState, useEffect } from 'react';
@@ -16,6 +16,7 @@ import Navbar from '../components/layout/Navbar';
 import LoadingSpinner from '../components/common/LoadingSpinner';
 import ErrorMessage from '../components/common/ErrorMessage';
 import { getCustomerById, getInsights } from '../api/customerApi';
+import api from '../api/axios';
 
 // ── Helpers ────────────────────────────────────────────────
 
@@ -66,14 +67,12 @@ function healthColor(score) {
     return '#7f1d1d';
 }
 
-// Churn risk colour class
 function churnBadgeClass(level) {
     if (level === 'Low') return 'badge-green';
     if (level === 'Medium') return 'badge-amber';
     return 'badge-red';
 }
 
-// CLV tier colour class
 function clvBadgeClass(tier) {
     const map = {
         Platinum: 'badge-indigo', Gold: 'badge-gold',
@@ -82,7 +81,6 @@ function clvBadgeClass(tier) {
     return map[tier] || 'badge-gray';
 }
 
-// Segment colour class
 function segmentBadgeClass(code) {
     const map = {
         HIGH_VALUE: 'badge-indigo', REGULAR: 'badge-blue',
@@ -91,13 +89,24 @@ function segmentBadgeClass(code) {
     return map[code] || 'badge-gray';
 }
 
-// Priority → colour
 function priorityStyle(priority = '') {
     if (priority.includes('URGENT') || priority.includes('CRITICAL'))
         return { background: 'var(--danger-light)', borderLeft: '3px solid var(--danger)', color: '#dc2626' };
     if (priority.includes('OPPORTUNITY'))
         return { background: 'var(--success-light)', borderLeft: '3px solid var(--success)', color: '#059669' };
     return { background: 'var(--info-light)', borderLeft: '3px solid var(--info)', color: '#2563eb' };
+}
+
+// SHAP bar colour: positive = red (increases churn), negative = green
+function shapBarColor(val) {
+    return val > 0 ? '#ef4444' : '#10b981';
+}
+
+// Anomaly badge
+function anomalyBadge(flag) {
+    return flag === 'ANOMALY'
+        ? { bg: '#fef2f2', color: '#dc2626', border: '#fca5a5', text: '⚠ Anomaly Detected' }
+        : { bg: '#f0fdf4', color: '#16a34a', border: '#86efac', text: '✓ Normal Behaviour' };
 }
 
 // ── Main Component ─────────────────────────────────────────
@@ -108,7 +117,11 @@ export default function CustomerDetail() {
 
     const [customer, setCustomer] = useState(null);
     const [purchases, setPurchases] = useState([]);
-    const [report, setReport] = useState(null);   // AI insights report
+    const [report, setReport] = useState(null);
+    const [shapData, setShapData] = useState(null);
+    const [nextPurchase, setNextPurchase] = useState(null);
+    const [recData, setRecData] = useState(null);
+    const [anomalyData, setAnomalyData] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
 
@@ -116,7 +129,7 @@ export default function CustomerDetail() {
         setLoading(true);
         setError(null);
         try {
-            // Run both API calls at the same time (parallel)
+            // Core data in parallel
             const [custRes, insightRes] = await Promise.all([
                 getCustomerById(id),
                 getInsights(id),
@@ -128,6 +141,20 @@ export default function CustomerDetail() {
             setCustomer(custRes.customer);
             setPurchases(custRes.purchase_history || []);
             setReport(insightRes.intelligence_report);
+
+            // New AI panels — fetch in parallel, non-blocking
+            const [shapRes, npRes, recRes, anomRes] = await Promise.allSettled([
+                api.get(`/api/customers/${id}/explain/shap`),
+                api.get(`/api/customers/${id}/next-purchase`),
+                api.get(`/api/customers/${id}/recommend`),
+                api.get(`/api/customers/${id}/anomaly`),
+            ]);
+
+            if (shapRes.status === 'fulfilled') setShapData(shapRes.value.data?.explanation);
+            if (npRes.status === 'fulfilled') setNextPurchase(npRes.value.data?.next_purchase);
+            if (recRes.status === 'fulfilled') setRecData(recRes.value.data?.recommendations);
+            if (anomRes.status === 'fulfilled') setAnomalyData(anomRes.value.data?.anomaly);
+
         } catch (err) {
             setError(err.message || 'Failed to load customer data.');
         } finally {
@@ -169,11 +196,44 @@ export default function CustomerDetail() {
     const score = report.health_score ?? 0;
     const color = healthColor(score);
 
-    // Status badge class
     const statusClass = {
         Premium: 'badge-indigo', Active: 'badge-green',
         Inactive: 'badge-amber', Cancelled: 'badge-red'
     }[customer.subscription_status] || 'badge-gray';
+
+    // ── CSV Export ─────────────────────────────────────────
+    const exportCSV = () => {
+        const rows = [
+            ['Field', 'Value'],
+            ['Customer ID', id],
+            ['Name', customer.name],
+            ['Email', customer.email],
+            ['Location', customer.location],
+            ['Subscription', customer.subscription_status],
+            ['Health Score', score],
+            ['Churn Risk', churn.risk_level],
+            ['Churn %', churn.percentage],
+            ['CLV Tier', clv.tier],
+            ['CLV Predicted', clv.formatted],
+            ['Segment', segment.name],
+            ['Total Orders', beh.total_orders],
+            ['Total Spend', beh.total_spend],
+            ['Days Since Last Purchase', beh.days_since_purchase],
+        ];
+        if (shapData) {
+            rows.push(['--- SHAP Explanation ---', '']);
+            rows.push(['Plain Language', shapData.plain_language_explanation]);
+            (shapData.shap_values || []).forEach(s => {
+                rows.push([s.feature, `${s.shap_value > 0 ? '+' : ''}${s.shap_value} (${s.direction})`]);
+            });
+        }
+        const csv = rows.map(r => r.map(c => `"${c}"`).join(',')).join('\n');
+        const blob = new Blob([csv], { type: 'text/csv' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url; a.download = `${id}_intelligence_report.csv`;
+        a.click(); URL.revokeObjectURL(url);
+    };
 
     // ── Render ─────────────────────────────────────────────
     return (
@@ -185,12 +245,15 @@ export default function CustomerDetail() {
 
             <div className="page-body">
 
-                {/* Back button */}
-                <button className="btn btn-outline btn-sm"
-                    onClick={() => navigate('/customers')}
-                    style={{ marginBottom: 20 }}>
-                    ← Back to Customers
-                </button>
+                {/* Back + Export */}
+                <div style={{ display: 'flex', gap: 12, marginBottom: 20, alignItems: 'center' }}>
+                    <button className="btn btn-outline btn-sm" onClick={() => navigate('/customers')}>
+                        ← Back to Customers
+                    </button>
+                    <button className="btn btn-primary btn-sm" onClick={exportCSV}>
+                        ⬇ Export CSV Report
+                    </button>
+                </div>
 
                 {/* ── PROFILE HEADER CARD ── */}
                 <div className="card" style={{ marginBottom: 20 }}>
@@ -250,7 +313,6 @@ export default function CustomerDetail() {
                 {/* ── ROW 1: AI Summary + Predictions ── */}
                 <div className="grid-2" style={{ marginBottom: 20 }}>
 
-                    {/* AI Summary */}
                     <SectionCard title="AI Intelligence Summary" icon="🧠">
                         <p style={{ fontSize: 13.5, lineHeight: 1.8, color: 'var(--text-primary)' }}>
                             {report.ai_summary || 'No summary available.'}
@@ -263,11 +325,8 @@ export default function CustomerDetail() {
                         </div>
                     </SectionCard>
 
-                    {/* Predictions */}
                     <SectionCard title="ML Predictions" icon="📊">
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-
-                            {/* Churn */}
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                 <div>
                                     <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 4 }}>CHURN RISK</div>
@@ -281,13 +340,10 @@ export default function CustomerDetail() {
 
                             <hr style={{ borderColor: 'var(--border)' }} />
 
-                            {/* CLV */}
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                 <div>
                                     <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 4 }}>PREDICTED CLV</div>
-                                    <div style={{ fontSize: 22, fontWeight: 700, color: 'var(--success)' }}>
-                                        {clv.formatted || '—'}
-                                    </div>
+                                    <div style={{ fontSize: 22, fontWeight: 700, color: 'var(--success)' }}>{clv.formatted || '—'}</div>
                                     <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Customer Lifetime Value (est.)</div>
                                 </div>
                                 <span className={`badge ${clvBadgeClass(clv.tier)}`} style={{ fontSize: 13, padding: '6px 14px' }}>
@@ -297,29 +353,24 @@ export default function CustomerDetail() {
 
                             <hr style={{ borderColor: 'var(--border)' }} />
 
-                            {/* Segment */}
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                 <div>
                                     <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 4 }}>SEGMENT</div>
                                     <div style={{ fontSize: 18, fontWeight: 700 }}>{segment.name || '—'}</div>
-                                    <div style={{ fontSize: 11, color: 'var(--text-muted)', maxWidth: 200 }}>
-                                        {segment.reason || ''}
-                                    </div>
+                                    <div style={{ fontSize: 11, color: 'var(--text-muted)', maxWidth: 200 }}>{segment.reason || ''}</div>
                                 </div>
                                 <span className={`badge ${segmentBadgeClass(segment.code)}`} style={{ fontSize: 13, padding: '6px 14px' }}>
                                     {segment.name || '—'}
                                 </span>
                             </div>
-
                         </div>
                     </SectionCard>
 
                 </div>
 
-                {/* ── ROW 2: Behavior + Customer Info ── */}
+                {/* ── ROW 2: Behavior + Account ── */}
                 <div className="grid-2" style={{ marginBottom: 20 }}>
 
-                    {/* Purchase Behavior */}
                     <SectionCard title="Purchase Behavior" icon="🛒">
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
                             <InfoRow label="Recency (days since last purchase)" value={beh.days_since_purchase ?? '—'} />
@@ -331,7 +382,6 @@ export default function CustomerDetail() {
                         </div>
                     </SectionCard>
 
-                    {/* Customer Account Info */}
                     <SectionCard title="Account Details" icon="👤">
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
                             <InfoRow label="Customer ID" value={customer.customer_id} />
@@ -348,7 +398,188 @@ export default function CustomerDetail() {
 
                 </div>
 
-                {/* ── RECOMMENDATIONS ── */}
+                {/* ── NEW: SHAP EXPLANATION PANEL ── */}
+                {shapData && !shapData.error && (
+                    <SectionCard title="Explainable AI — Why this Churn Prediction?" icon="🔍" style={{ marginBottom: 20 }}>
+                        {/* Plain language */}
+                        <div style={{
+                            background: churn.risk_level === 'High' ? '#fef2f2' : churn.risk_level === 'Low' ? '#f0fdf4' : '#fefce8',
+                            border: `1px solid ${churn.risk_level === 'High' ? '#fca5a5' : churn.risk_level === 'Low' ? '#86efac' : '#fde68a'}`,
+                            borderRadius: 8, padding: '12px 16px', marginBottom: 16,
+                            fontSize: 13.5, lineHeight: 1.8,
+                            color: churn.risk_level === 'High' ? '#991b1b' : churn.risk_level === 'Low' ? '#166534' : '#92400e'
+                        }}>
+                            💬 <strong>Plain-language explanation:</strong><br />
+                            {shapData.plain_language_explanation}
+                        </div>
+
+                        {/* SHAP bars */}
+                        <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 10 }}>
+                            Feature impact on churn probability (SHAP values) — red = increases risk, green = decreases risk
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                            {(shapData.shap_values || []).map((s, i) => {
+                                const barWidth = Math.min(Math.abs(s.shap_value) * 300, 100);
+                                const barCol = shapBarColor(s.shap_value);
+                                return (
+                                    <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                                        <div style={{ width: 180, fontSize: 12, color: 'var(--text-secondary)', textAlign: 'right', flexShrink: 0 }}>
+                                            {s.feature}
+                                        </div>
+                                        <div style={{ flex: 1, background: 'var(--bg-tertiary)', borderRadius: 4, height: 14, position: 'relative' }}>
+                                            <div style={{
+                                                width: `${barWidth}%`, height: '100%',
+                                                background: barCol, borderRadius: 4,
+                                                transition: 'width 0.4s ease',
+                                            }} />
+                                        </div>
+                                        <div style={{ width: 60, fontSize: 11, color: barCol, fontWeight: 600, flexShrink: 0 }}>
+                                            {s.shap_value > 0 ? '+' : ''}{s.shap_value?.toFixed(3)}
+                                        </div>
+                                        <div style={{ fontSize: 11, color: 'var(--text-muted)', width: 120, flexShrink: 0 }}>
+                                            val: {s.actual_value ?? '—'}
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                        <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 12, fontStyle: 'italic' }}>
+                            Method: {shapData.method} | Model prediction: {shapData.prediction} ({(shapData.churn_probability * 100).toFixed(1)}%)
+                        </div>
+                    </SectionCard>
+                )}
+
+                {/* ── NEW: NEXT-PURCHASE PREDICTION ── */}
+                {nextPurchase && !nextPurchase.error && (
+                    <div className="grid-2" style={{ marginBottom: 20 }}>
+                        <SectionCard title="Next Purchase Prediction" icon="🛍️">
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+                                <InfoRow label="Predicted Next Date" value={formatDate(nextPurchase.predicted_next_date)} />
+                                <InfoRow label="Days Until Next Purchase" value={
+                                    nextPurchase.days_until_next >= 0
+                                        ? `In ${nextPurchase.days_until_next} days`
+                                        : `${Math.abs(nextPurchase.days_until_next)} days overdue`
+                                } />
+                                <InfoRow label="Predicted Amount" value={formatRupee(nextPurchase.predicted_amount)} />
+                                <InfoRow label="Likely Category" value={nextPurchase.likely_category || '—'} />
+                                <InfoRow label="Avg Purchase Interval" value={`${nextPurchase.avg_interval_days} days`} />
+                                <InfoRow label="Purchase History Count" value={nextPurchase.purchase_history_count} />
+                            </div>
+                            {/* Probability pill */}
+                            <div style={{ marginTop: 14, display: 'flex', alignItems: 'center', gap: 10 }}>
+                                <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Next-Purchase Probability:</div>
+                                <div style={{
+                                    background: nextPurchase.next_purchase_probability >= 0.7
+                                        ? '#d1fae5' : nextPurchase.next_purchase_probability >= 0.4 ? '#fef9c3' : '#fee2e2',
+                                    color: nextPurchase.next_purchase_probability >= 0.7
+                                        ? '#065f46' : nextPurchase.next_purchase_probability >= 0.4 ? '#78350f' : '#991b1b',
+                                    padding: '4px 12px', borderRadius: 20, fontSize: 13, fontWeight: 700
+                                }}>
+                                    {(nextPurchase.next_purchase_probability * 100).toFixed(0)}% — {nextPurchase.probability_label}
+                                </div>
+                            </div>
+                            {/* Mini sequence */}
+                            {nextPurchase.sequence_summary?.length > 0 && (
+                                <div style={{ marginTop: 14 }}>
+                                    <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 6 }}>Last {nextPurchase.sequence_summary.length} purchases:</div>
+                                    {nextPurchase.sequence_summary.map((p, i) => (
+                                        <div key={i} style={{
+                                            display: 'flex', justifyContent: 'space-between',
+                                            fontSize: 12, padding: '4px 0',
+                                            borderBottom: '1px solid var(--border)'
+                                        }}>
+                                            <span style={{ color: 'var(--text-secondary)' }}>{formatDate(p.date)}</span>
+                                            <span className="badge badge-blue">{p.category || '—'}</span>
+                                            <span style={{ fontWeight: 600, color: 'var(--success)' }}>{formatRupee(p.amount)}</span>
+                                            {p.gap_days != null && <span style={{ color: 'var(--text-muted)' }}>+{p.gap_days}d</span>}
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </SectionCard>
+
+                        {/* ── NEW: ANOMALY DETECTION ── */}
+                        {anomalyData && !anomalyData.error && (
+                            <SectionCard title="Anomaly Detection" icon="🔎">
+                                {(() => {
+                                    const badge = anomalyBadge(anomalyData.anomaly_flag);
+                                    return (
+                                        <>
+                                            <div style={{
+                                                background: badge.bg, color: badge.color,
+                                                border: `1px solid ${badge.border}`,
+                                                borderRadius: 8, padding: '10px 14px',
+                                                fontSize: 14, fontWeight: 700, marginBottom: 14
+                                            }}>
+                                                {badge.text}
+                                            </div>
+
+                                            {/* Score gauge */}
+                                            <div style={{ marginBottom: 14 }}>
+                                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                                                    <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Anomaly Score</span>
+                                                    <span style={{ fontSize: 12, fontWeight: 700, color: anomalyData.anomaly_score > 50 ? '#dc2626' : '#16a34a' }}>
+                                                        {anomalyData.anomaly_score}/100
+                                                    </span>
+                                                </div>
+                                                <div style={{ background: 'var(--bg-tertiary)', borderRadius: 8, height: 10 }}>
+                                                    <div style={{
+                                                        width: `${anomalyData.anomaly_score}%`, height: '100%', borderRadius: 8,
+                                                        background: anomalyData.anomaly_score > 70 ? '#ef4444' : anomalyData.anomaly_score > 40 ? '#f59e0b' : '#10b981',
+                                                        transition: 'width 0.5s ease'
+                                                    }} />
+                                                </div>
+                                            </div>
+
+                                            <div style={{ fontSize: 13, lineHeight: 1.7, color: 'var(--text-secondary)', marginBottom: 12 }}>
+                                                {anomalyData.explanation}
+                                            </div>
+
+                                            <div style={{ fontSize: 11, color: 'var(--text-muted)', fontStyle: 'italic' }}>
+                                                Method: Isolation Forest | Raw score: {anomalyData.raw_score}
+                                            </div>
+                                        </>
+                                    );
+                                })()}
+                            </SectionCard>
+                        )}
+                    </div>
+                )}
+
+                {/* ── NEW: PRODUCT RECOMMENDATIONS ── */}
+                {recData && !recData.error && recData.recommendations?.length > 0 && (
+                    <SectionCard title="Product Recommendations" icon="🎯" style={{ marginBottom: 20 }}>
+                        <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 14 }}>
+                            Personalised based on purchase history · Method: <strong>{recData.method}</strong>
+                            {recData.already_purchased?.length > 0 && (
+                                <> · Already purchased: {recData.already_purchased.join(', ')}</>
+                            )}
+                        </div>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 12 }}>
+                            {recData.recommendations.map((rec, i) => (
+                                <div key={i} style={{
+                                    background: 'var(--bg-secondary)',
+                                    border: '1px solid var(--border)',
+                                    borderRadius: 10, padding: '12px 14px',
+                                }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                                        <span style={{
+                                            background: rec.source === 'collaborative' ? '#dbeafe' : '#f3e8ff',
+                                            color: rec.source === 'collaborative' ? '#1d4ed8' : '#7c3aed',
+                                            fontSize: 10, padding: '2px 8px', borderRadius: 10, fontWeight: 600
+                                        }}>
+                                            {rec.source === 'collaborative' ? '👥 Collaborative' : '⭐ Popular'}
+                                        </span>
+                                    </div>
+                                    <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 4 }}>{rec.category}</div>
+                                    <div style={{ fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.5 }}>{rec.reason}</div>
+                                </div>
+                            ))}
+                        </div>
+                    </SectionCard>
+                )}
+
+                {/* ── EXISTING: Recommended Actions ── */}
                 {recs.length > 0 && (
                     <SectionCard title="Recommended Actions" icon="💡" style={{ marginBottom: 20 }}>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -365,20 +596,14 @@ export default function CustomerDetail() {
                                 </div>
                             ))}
                         </div>
-                        <div style={{
-                            fontSize: 11, color: 'var(--text-muted)', marginTop: 12,
-                            fontStyle: 'italic'
-                        }}>
+                        <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 12, fontStyle: 'italic' }}>
                             {report.disclaimer}
                         </div>
                     </SectionCard>
                 )}
 
                 {/* ── PURCHASE HISTORY TABLE ── */}
-                <SectionCard
-                    title={`Purchase History (${purchases.length} records)`}
-                    icon="🧾"
-                >
+                <SectionCard title={`Purchase History (${purchases.length} records)`} icon="🧾">
                     {purchases.length === 0 ? (
                         <div className="state-center" style={{ padding: '32px 0' }}>
                             <div className="state-desc">No purchase records found.</div>
@@ -398,9 +623,7 @@ export default function CustomerDetail() {
                                     {purchases.map((p, i) => (
                                         <tr key={p.purchase_id || i}>
                                             <td className="td-muted">{i + 1}</td>
-                                            <td>
-                                                <span className="badge badge-blue">{p.product_category}</span>
-                                            </td>
+                                            <td><span className="badge badge-blue">{p.product_category}</span></td>
                                             <td style={{ fontWeight: 600, color: 'var(--success)' }}>
                                                 {formatRupee(p.amount)}
                                             </td>

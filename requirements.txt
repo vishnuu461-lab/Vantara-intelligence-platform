@@ -1,9 +1,6 @@
 # ============================================================
 # Vantara – Python Dependencies (requirements.txt)
 # ============================================================
-# This file lists ALL libraries our project needs.
-# Run: python -m pip install -r requirements.txt to install.
-# ============================================================
 
 # --- Web Framework ---
 Flask==3.0.3
@@ -17,13 +14,29 @@ PyMySQL==1.1.1
 # --- Environment Variables ---
 python-dotenv==1.0.1
 
-# --- Data Science (latest versions with Python 3.14 wheels) ---
+# --- Data Science ---
 pandas
 numpy
 
-# --- Machine Learning ---
+# --- Machine Learning (core) ---
 scikit-learn
 joblib
 
+# --- ML Model Extensions ---
+xgboost
+lightgbm
+
+# --- Explainable AI ---
+shap
+lime
+
 # --- Utilities ---
 Werkzeug==3.0.4
+requests
+
+# --- Testing ---
+pytest
+pytest-cov
+
+# --- Openpyxl (Online Retail II dataset loading) ---
+openpyxl

@@ -1,0 +1,272 @@
+[
+  {
+    "timestamp": "2026-10-01T14:33:15.622171",
+    "model_name": "Logistic Regression",
+    "dataset": "synthetic_2000",
+    "n_features": 7,
+    "feature_names": [
+      "total_orders",
+      "total_spend",
+      "days_since_last_purchase",
+      "average_order_value",
+      "website_visits",
+      "complaints",
+      "subscription_active"
+    ],
+    "train_time_sec": 0.01,
+    "val_metrics": {
+      "accuracy": 0.89,
+      "precision": 0.7273,
+      "recall": 1.0,
+      "f1": 0.8421,
+      "roc_auc": 0.9295,
+      "confusion_matrix": [
+        [
+          179,
+          33
+        ],
+        [
+          0,
+          88
+        ]
+      ]
+    },
+    "test_metrics": {
+      "accuracy": 0.88,
+      "precision": 0.7097,
+      "recall": 1.0,
+      "f1": 0.8302,
+      "roc_auc": 0.9152,
+      "confusion_matrix": [
+        [
+          176,
+          36
+        ],
+        [
+          0,
+          88
+        ]
+      ]
+    },
+    "cv_roc_auc": {
+      "mean": 0.9287,
+      "std": 0.005
+    }
+  },
+  {
+    "timestamp": "2026-10-01T14:33:16.317282",
+    "model_name": "Random Forest",
+    "dataset": "synthetic_2000",
+    "n_features": 7,
+    "feature_names": [
+      "total_orders",
+      "total_spend",
+      "days_since_last_purchase",
+      "average_order_value",
+      "website_visits",
+      "complaints",
+      "subscription_active"
+    ],
+    "train_time_sec": 0.12,
+    "val_metrics": {
+      "accuracy": 0.8933,
+      "precision": 0.7333,
+      "recall": 1.0,
+      "f1": 0.8462,
+      "roc_auc": 0.9264,
+      "confusion_matrix": [
+        [
+          180,
+          32
+        ],
+        [
+          0,
+          88
+        ]
+      ]
+    },
+    "test_metrics": {
+      "accuracy": 0.8767,
+      "precision": 0.7073,
+      "recall": 0.9886,
+      "f1": 0.8246,
+      "roc_auc": 0.9277,
+      "confusion_matrix": [
+        [
+          176,
+          36
+        ],
+        [
+          1,
+          87
+        ]
+      ]
+    },
+    "cv_roc_auc": {
+      "mean": 0.9285,
+      "std": 0.0106
+    }
+  },
+  {
+    "timestamp": "2026-10-01T14:33:17.047011",
+    "model_name": "ANN (MLP)",
+    "dataset": "synthetic_2000",
+    "n_features": 7,
+    "feature_names": [
+      "total_orders",
+      "total_spend",
+      "days_since_last_purchase",
+      "average_order_value",
+      "website_visits",
+      "complaints",
+      "subscription_active"
+    ],
+    "train_time_sec": 0.11,
+    "val_metrics": {
+      "accuracy": 0.8867,
+      "precision": 0.7288,
+      "recall": 0.9773,
+      "f1": 0.835,
+      "roc_auc": 0.9305,
+      "confusion_matrix": [
+        [
+          180,
+          32
+        ],
+        [
+          2,
+          86
+        ]
+      ]
+    },
+    "test_metrics": {
+      "accuracy": 0.8767,
+      "precision": 0.7143,
+      "recall": 0.9659,
+      "f1": 0.8213,
+      "roc_auc": 0.9214,
+      "confusion_matrix": [
+        [
+          178,
+          34
+        ],
+        [
+          3,
+          85
+        ]
+      ]
+    },
+    "cv_roc_auc": {
+      "mean": 0.9319,
+      "std": 0.0073
+    }
+  },
+  {
+    "timestamp": "2026-10-01T14:33:17.757185",
+    "model_name": "XGBoost",
+    "dataset": "synthetic_2000",
+    "n_features": 7,
+    "feature_names": [
+      "total_orders",
+      "total_spend",
+      "days_since_last_purchase",
+      "average_order_value",
+      "website_visits",
+      "complaints",
+      "subscription_active"
+    ],
+    "train_time_sec": 0.14,
+    "val_metrics": {
+      "accuracy": 0.8933,
+      "precision": 0.7373,
+      "recall": 0.9886,
+      "f1": 0.8447,
+      "roc_auc": 0.93,
+      "confusion_matrix": [
+        [
+          181,
+          31
+        ],
+        [
+          1,
+          87
+        ]
+      ]
+    },
+    "test_metrics": {
+      "accuracy": 0.88,
+      "precision": 0.7203,
+      "recall": 0.9659,
+      "f1": 0.8252,
+      "roc_auc": 0.937,
+      "confusion_matrix": [
+        [
+          179,
+          33
+        ],
+        [
+          3,
+          85
+        ]
+      ]
+    },
+    "cv_roc_auc": {
+      "mean": 0.9309,
+      "std": 0.0088
+    }
+  },
+  {
+    "timestamp": "2026-10-01T14:33:17.988226",
+    "model_name": "LightGBM",
+    "dataset": "synthetic_2000",
+    "n_features": 7,
+    "feature_names": [
+      "total_orders",
+      "total_spend",
+      "days_since_last_purchase",
+      "average_order_value",
+      "website_visits",
+      "complaints",
+      "subscription_active"
+    ],
+    "train_time_sec": 0.03,
+    "val_metrics": {
+      "accuracy": 0.8967,
+      "precision": 0.7436,
+      "recall": 0.9886,
+      "f1": 0.8488,
+      "roc_auc": 0.9285,
+      "confusion_matrix": [
+        [
+          182,
+          30
+        ],
+        [
+          1,
+          87
+        ]
+      ]
+    },
+    "test_metrics": {
+      "accuracy": 0.8833,
+      "precision": 0.7265,
+      "recall": 0.9659,
+      "f1": 0.8293,
+      "roc_auc": 0.9373,
+      "confusion_matrix": [
+        [
+          180,
+          32
+        ],
+        [
+          3,
+          85
+        ]
+      ]
+    },
+    "cv_roc_auc": {
+      "mean": 0.9289,
+      "std": 0.0104
+    }
+  }
+]
