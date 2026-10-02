@@ -68,6 +68,56 @@ def health_check():
     }), 200
 
 
+@app.route("/api/seed-db")
+def seed_db():
+    """
+    One-time database seeding endpoint.
+    Safe to call multiple times — skips if data already exists.
+    Trigger via: GET /api/seed-db
+    """
+    try:
+        from models.customer import Customer
+        from models.purchase import Purchase
+        from data.seed_data import SAMPLE_CUSTOMERS, SAMPLE_PURCHASES
+        from datetime import date
+
+        existing = Customer.query.count()
+        if existing > 0:
+            return jsonify({
+                "status": "skipped",
+                "message": f"Database already has {existing} customers. No action taken.",
+                "customers": existing
+            }), 200
+
+        # Seed customers
+        for data in SAMPLE_CUSTOMERS:
+            db.session.add(Customer(**data))
+        db.session.commit()
+
+        # Seed purchases
+        for data in SAMPLE_PURCHASES:
+            db.session.add(Purchase(**data))
+        db.session.commit()
+
+        total_customers = Customer.query.count()
+        total_purchases = Purchase.query.count()
+
+        return jsonify({
+            "status": "success",
+            "message": "Database seeded successfully!",
+            "customers_added": total_customers,
+            "purchases_added": total_purchases
+        }), 200
+
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({
+            "status": "error",
+            "message": str(e)
+        }), 500
+
+
+
 @app.route("/api/db-test")
 def db_test():
     """Tests the MySQL database connection."""
