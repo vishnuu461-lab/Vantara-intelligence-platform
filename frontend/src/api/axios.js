@@ -1,21 +1,34 @@
 // ============================================================
 // api/axios.js — Centralized Axios Instance
 // ============================================================
-// Instead of writing "http://localhost:5000" everywhere,
-// we create ONE axios instance with the base URL set once.
+// VITE_API_URL is set via:
+//   - Local dev:  frontend/.env  → http://localhost:5000
+//   - Production: Vercel env var → https://vantara-ai-intelligence-platform.onrender.com
 //
-// import api from './axios'
-// api.get('/api/dashboard')  ← automatically hits localhost:5000
-//
-// VITE_API_URL comes from the .env file we created:
-//   VITE_API_URL=http://localhost:5000
+// The fallback URL ensures the deployed site always works
+// even if the Vercel env var is not picked up in the build.
 // ============================================================
 
 import axios from 'axios';
 
+// Determine the correct backend URL:
+// 1. Use VITE_API_URL env var if available (set in Vercel dashboard)
+// 2. If running on localhost → use local Flask server
+// 3. Otherwise → use the deployed Render backend
+const getBaseURL = () => {
+    if (import.meta.env.VITE_API_URL) {
+        return import.meta.env.VITE_API_URL;
+    }
+    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+        return 'http://localhost:5000';
+    }
+    // Production fallback — always points to Render backend
+    return 'https://vantara-ai-intelligence-platform.onrender.com';
+};
+
 const api = axios.create({
-    baseURL: import.meta.env.VITE_API_URL || 'http://localhost:5000',
-    timeout: 15000,   // 15 seconds — cancel if backend takes too long
+    baseURL: getBaseURL(),
+    timeout: 30000,   // 30 seconds — extra time for Render cold start wake-up
     headers: {
         'Content-Type': 'application/json',
     },
