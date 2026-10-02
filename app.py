@@ -25,14 +25,17 @@ app.config.from_object(Config)
 # This is the correct pattern when db is in a separate file.
 db.init_app(app)
 
-# CORS — allow local dev + deployed Vercel frontend
-_frontend_url = os.environ.get("FRONTEND_URL", "http://localhost:5173")
-CORS(app, origins=[
-    "http://localhost:5173",
-    "http://localhost:5174",
-    "http://localhost:3000",
-    _frontend_url,
-], supports_credentials=True)
+# CORS — allow local dev + all Vercel deployments
+# Using regex to match any *.vercel.app subdomain automatically
+# so no manual FRONTEND_URL env var update is needed on Render.
+CORS(app,
+     origins=[
+         r"http://localhost:\d+",                          # any local port
+         r"https://vantara-intelligence-platform\.vercel\.app",  # production
+         r"https://vantara-.*\.vercel\.app",               # preview deployments
+         os.environ.get("FRONTEND_URL", ""),               # custom domain (optional)
+     ],
+     supports_credentials=True)
 
 
 # ============================================================
