@@ -6,6 +6,9 @@
 Flask==3.0.3
 Flask-CORS==4.0.1
 
+# --- Production WSGI Server (required for Render deployment) ---
+gunicorn==22.0.0
+
 # --- Database ---
 Flask-SQLAlchemy==3.1.1
 SQLAlchemy==2.0.35

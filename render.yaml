@@ -1,0 +1,40 @@
+# ============================================================
+# render.yaml — Render.com Deployment Configuration
+# ============================================================
+# This file tells Render how to build and run the Vantara
+# Flask backend. Render reads this automatically from the repo root.
+#
+# HOW TO USE:
+#   1. Push this file to GitHub (already done)
+#   2. Go to https://render.com → New → Web Service
+#   3. Connect your GitHub repo
+#   4. Render will auto-detect this file
+# ============================================================
+
+services:
+  - type: web
+    name: vantara-backend
+    runtime: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn app:app --bind 0.0.0.0:$PORT --workers 2 --timeout 120
+    plan: free
+
+    envVars:
+      - key: FLASK_ENV
+        value: production
+      - key: FLASK_DEBUG
+        value: "False"
+      - key: SECRET_KEY
+        generateValue: true          # Render auto-generates a secure random value
+      - key: DB_HOST
+        sync: false                  # Set manually in Render dashboard
+      - key: DB_PORT
+        value: "3306"
+      - key: DB_NAME
+        sync: false                  # Set manually in Render dashboard
+      - key: DB_USER
+        sync: false                  # Set manually in Render dashboard
+      - key: DB_PASSWORD
+        sync: false                  # Set manually in Render dashboard
+      - key: FRONTEND_URL
+        sync: false                  # Set to your Vercel URL after deploying frontend

@@ -1,28 +1,26 @@
 # ============================================================
 # Vantara – .gitignore
 # ============================================================
-# This file tells Git which files/folders to IGNORE.
-# We don't want to accidentally push secrets or unnecessary
-# files to GitHub.
-# ============================================================
 
-# --- Virtual Environment (don't push this to GitHub) ---
+# --- Virtual Environment ---
 venv/
 env/
 .venv/
+C:/Vantara-venv/
 
-# --- Environment Variables (NEVER push this!) ---
+# --- Environment Variables (NEVER push real credentials!) ---
 .env
+frontend/.env
 
-# --- Python Cache Files (auto-generated, not needed) ---
+# --- Python Cache Files ---
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
 
-# --- Machine Learning Models (large files, regenerable) ---
-ml/models/*.pkl
-ml/models/*.joblib
+# NOTE: ML model .pkl files ARE committed to allow cloud deployment
+# on Render without requiring a separate training step.
+# Models are small enough (~370KB total) to include in the repo.
 
 # --- Database Files ---
 *.db
@@ -43,3 +41,13 @@ Thumbs.db
 # --- Logs ---
 *.log
 logs/
+
+# --- Node ---
+node_modules/
+frontend/node_modules/
+
+# --- Build output ---
+frontend/dist/
+
+# --- Pytest cache ---
+.pytest_cache/

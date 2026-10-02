@@ -5,6 +5,8 @@ from flask import Flask, jsonify
 from flask_cors import CORS
 from config import Config
 from extensions import db   # db now lives in extensions.py
+import os
+
 
 # ============================================================
 # Step 1: Create the Flask Application
@@ -23,8 +25,15 @@ app.config.from_object(Config)
 # This is the correct pattern when db is in a separate file.
 db.init_app(app)
 
-# CORS allows the future frontend to talk to this backend
-CORS(app)
+# CORS — allow local dev + deployed Vercel frontend
+_frontend_url = os.environ.get("FRONTEND_URL", "http://localhost:5173")
+CORS(app, origins=[
+    "http://localhost:5173",
+    "http://localhost:5174",
+    "http://localhost:3000",
+    _frontend_url,
+], supports_credentials=True)
+
 
 # ============================================================
 # Step 4: Basic Routes

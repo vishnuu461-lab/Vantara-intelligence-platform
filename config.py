@@ -1,59 +1,70 @@
 # ============================================================
 # config.py — Vantara Configuration
 # ============================================================
-# This file reads settings from the .env file and makes them
-# available to the rest of the application.
-#
-# WHY SEPARATE FILE?
-# Keeping config in its own file means app.py stays clean.
-# If you ever need to change a setting, you know exactly
-# where to look.
+# Reads settings from environment variables (.env locally,
+# Render dashboard in production).
 # ============================================================
 
 import os
 from dotenv import load_dotenv
 from urllib.parse import quote_plus
 
-# --- Load the .env file ---
-# This reads all KEY=VALUE pairs from .env into the environment.
-# After this line, os.environ["DB_PASSWORD"] etc. will work.
 load_dotenv()
 
 
 class Config:
     """
     Central configuration class for Vantara.
-    All settings are read from environment variables (.env file).
+    All settings are read from environment variables.
+
+    Local development: values come from .env file
+    Production (Render): values come from Render environment variables
     """
 
     # --- Flask Settings ---
-    # SECRET_KEY is used by Flask for security (sessions, etc.)
-    SECRET_KEY = os.environ.get("SECRET_KEY", "vantara-default-secret-key")
-
-    # DEBUG mode shows detailed error messages during development
-    DEBUG = os.environ.get("FLASK_DEBUG", "True") == "True"
+    SECRET_KEY = os.environ.get("SECRET_KEY", "vantara-default-secret-key-change-in-prod")
+    DEBUG = os.environ.get("FLASK_DEBUG", "False") == "True"
 
     # --- Database Settings ---
-    # We read individual pieces from .env and combine them
-    # into a single "connection string" that SQLAlchemy needs.
+    # Supports two modes:
+    #   1. DATABASE_URL  = full connection string (provided by Render, PlanetScale, etc.)
+    #   2. Individual DB_* vars = used locally or when you set them manually
+    _db_url = os.environ.get("DATABASE_URL", "")
+
+    if _db_url:
+        # Cloud databases (Render, PlanetScale, Railway, etc.) provide a full URL.
+        # Some providers give postgres:// — we keep mysql+pymysql:// format.
+        if _db_url.startswith("mysql://"):
+            _db_url = _db_url.replace("mysql://", "mysql+pymysql://", 1)
+        SQLALCHEMY_DATABASE_URI = _db_url
+    else:
+        # Local / manual config via individual env vars
+        DB_HOST     = os.environ.get("DB_HOST", "localhost")
+        DB_PORT     = os.environ.get("DB_PORT", "3306")
+        DB_NAME     = os.environ.get("DB_NAME", "vantara_db")
+        DB_USER     = os.environ.get("DB_USER", "root")
+        DB_PASSWORD = os.environ.get("DB_PASSWORD", "")
+        SQLALCHEMY_DATABASE_URI = (
+            f"mysql+pymysql://{DB_USER}:{quote_plus(DB_PASSWORD)}"
+            f"@{DB_HOST}:{DB_PORT}/{DB_NAME}"
+        )
+
+    # Keep these as class attributes for use in routes (e.g. /api/db-test)
     DB_HOST = os.environ.get("DB_HOST", "localhost")
     DB_PORT = os.environ.get("DB_PORT", "3306")
     DB_NAME = os.environ.get("DB_NAME", "vantara_db")
     DB_USER = os.environ.get("DB_USER", "root")
-    DB_PASSWORD = os.environ.get("DB_PASSWORD", "")
-
-    # --- SQLAlchemy Database URI ---
-    # Format: mysql+pymysql://username:password@host:port/database_name
-    # quote_plus() is used to safely encode special characters in the password
-    # For example, if your password is "Hello@123", the @ would confuse the URL
-    # parser. quote_plus converts it to "Hello%40123" so the URL is read correctly.
-    SQLALCHEMY_DATABASE_URI = (
-        f"mysql+pymysql://{DB_USER}:{quote_plus(DB_PASSWORD)}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
-    )
 
     # --- SQLAlchemy Settings ---
-    # This disables a feature we don't need (saves memory)
     SQLALCHEMY_TRACK_MODIFICATIONS = False
+
+    # Pool settings for production stability
+    SQLALCHEMY_ENGINE_OPTIONS = {
+        "pool_recycle": 280,       # Reconnect before MySQL's 5-min timeout
+        "pool_pre_ping": True,     # Test connection before using it
+        "pool_size": 5,
+        "max_overflow": 2,
+    }
 
     # --- Application Port ---
     APP_PORT = int(os.environ.get("APP_PORT", 5000))
