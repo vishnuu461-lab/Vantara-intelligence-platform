@@ -229,6 +229,33 @@ export default function InsightsPage() {
   const total = allReports.length;
   const agg = aggregates;
 
+  // ── Empty state (no customers in DB yet) ───────────────
+  if (!agg) return (
+    <>
+      <Navbar pageTitle="Insights" pageSubtitle="Fleet-level AI intelligence" />
+      <div className="page-body">
+        <div className="page-header">
+          <div>
+            <h1>AI Business Insights</h1>
+            <p>Fleet-level intelligence combining ML predictions, RFM analysis, and rule-based recommendations</p>
+          </div>
+          <button className="btn btn-outline btn-sm" onClick={fetchAll}>🔄 Refresh</button>
+        </div>
+        <div className="card" style={{ textAlign: 'center', padding: '60px 24px' }}>
+          <div style={{ fontSize: 48, marginBottom: 16 }}>📊</div>
+          <h2 style={{ marginBottom: 8, color: 'var(--text-primary)' }}>No Customer Data Yet</h2>
+          <p style={{ color: 'var(--text-secondary)', maxWidth: 420, margin: '0 auto 24px' }}>
+            The database is empty. Upload your customer data via the <strong>Data Upload</strong> page
+            or seed the database to see AI-powered insights.
+          </p>
+          <button className="btn btn-primary" onClick={() => window.location.href = '/upload'}>
+            📁 Go to Data Upload
+          </button>
+        </div>
+      </div>
+    </>
+  );
+
   // ── Render ─────────────────────────────────────────────
   return (
     <>
@@ -240,6 +267,7 @@ export default function InsightsPage() {
       <div className="page-body">
 
         {/* Header */}
+
         <div className="page-header">
           <div>
             <h1>AI Business Insights</h1>
@@ -545,8 +573,8 @@ export default function InsightsPage() {
                       {lookupReport.predictions?.churn?.percentage}
                     </div>
                     <span className={`badge ${lookupReport.predictions?.churn?.risk_level === 'High' ? 'badge-red' :
-                        lookupReport.predictions?.churn?.risk_level === 'Medium' ? 'badge-amber' :
-                          'badge-green'
+                      lookupReport.predictions?.churn?.risk_level === 'Medium' ? 'badge-amber' :
+                        'badge-green'
                       }`} style={{ marginTop: 4 }}>
                       {lookupReport.predictions?.churn?.risk_level} Risk
                     </span>
