@@ -18,21 +18,32 @@ from sqlalchemy import func
 # LOAD TRAINED MODEL
 # ============================================================
 
-# Use current working directory (where you run app.py from)
-# This is more reliable than __file__ in Flask debug mode
-BASE_DIR    = os.getcwd()
+# ── Lazy-load globals (loaded on first call, not at import time) ──
+_clv_model  = None
+_clv_scaler = None
+_model_loaded = False
+
+BASE_DIR    = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 MODEL_PATH  = os.path.join(BASE_DIR, "ml", "models", "clv_model.pkl")
 SCALER_PATH = os.path.join(BASE_DIR, "ml", "models", "clv_scaler.pkl")
 
-clv_model  = None
-clv_scaler = None
 
-if os.path.exists(MODEL_PATH) and os.path.exists(SCALER_PATH):
-    clv_model  = joblib.load(MODEL_PATH)
-    clv_scaler = joblib.load(SCALER_PATH)
-    print("  CLV model loaded successfully.")
-else:
-    print("  WARNING: CLV model not found. Run ml/train_clv_model.py first.")
+def _load_model():
+    """Load CLV model and scaler on demand (lazy init)."""
+    global _clv_model, _clv_scaler, _model_loaded
+    if _model_loaded:
+        return
+    _model_loaded = True
+    if os.path.exists(MODEL_PATH) and os.path.exists(SCALER_PATH):
+        try:
+            _clv_model  = joblib.load(MODEL_PATH)
+            _clv_scaler = joblib.load(SCALER_PATH)
+            print("  CLV model loaded successfully.")
+        except Exception as e:
+            print(f"  WARNING: CLV model load failed: {e}")
+            _clv_model = _clv_scaler = None
+    else:
+        print("  WARNING: CLV model not found. Run ml/train_clv_model.py first.")
 
 
 # ============================================================
@@ -52,6 +63,8 @@ def predict_clv(customer_id):
     Returns:
         dict with predicted_clv and supporting context
     """
+    # Lazy-load model on first call
+    _load_model()
 
     # --- Fetch customer ---
     customer = db.session.get(Customer, customer_id)
@@ -59,7 +72,7 @@ def predict_clv(customer_id):
         return None
 
     # --- Fallback if model not loaded ---
-    if clv_model is None or clv_scaler is None:
+    if _clv_model is None or _clv_scaler is None:
         return formula_based_clv(customer)
 
     today = date.today()
@@ -107,8 +120,8 @@ def predict_clv(customer_id):
     ]])
 
     # Scale and predict
-    features_scaled = clv_scaler.transform(features)
-    predicted_clv   = float(clv_model.predict(features_scaled)[0])
+    features_scaled = _clv_scaler.transform(features)
+    predicted_clv   = float(_clv_model.predict(features_scaled)[0])
     predicted_clv   = max(0, round(predicted_clv, 2))  # No negative CLV
 
     # --------------------------------------------------------

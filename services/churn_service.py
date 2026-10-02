@@ -25,21 +25,32 @@ from extensions import db
 # We load the model ONCE when this file is imported.
 # This is efficient — we don't reload the model on every request.
 
-# Build the absolute path to the model files
-BASE_DIR     = os.getcwd()
-MODEL_PATH   = os.path.join(BASE_DIR, "ml", "models", "churn_model.pkl")
-SCALER_PATH  = os.path.join(BASE_DIR, "ml", "models", "churn_scaler.pkl")
+# ── Lazy-load globals ─────────────────────────────────────
+_churn_model  = None
+_churn_scaler = None
+_model_loaded = False
 
-# Try to load the model — it may not exist yet if training hasn't run
-churn_model = None
-churn_scaler = None
+BASE_DIR    = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+MODEL_PATH  = os.path.join(BASE_DIR, "ml", "models", "churn_model.pkl")
+SCALER_PATH = os.path.join(BASE_DIR, "ml", "models", "churn_scaler.pkl")
 
-if os.path.exists(MODEL_PATH) and os.path.exists(SCALER_PATH):
-    churn_model = joblib.load(MODEL_PATH)
-    churn_scaler = joblib.load(SCALER_PATH)
-    print("  Churn model loaded successfully.")
-else:
-    print("  WARNING: Churn model not found. Run ml/train_churn_model.py first.")
+
+def _load_model():
+    """Load churn model and scaler on demand (lazy init)."""
+    global _churn_model, _churn_scaler, _model_loaded
+    if _model_loaded:
+        return
+    _model_loaded = True
+    if os.path.exists(MODEL_PATH) and os.path.exists(SCALER_PATH):
+        try:
+            _churn_model  = joblib.load(MODEL_PATH)
+            _churn_scaler = joblib.load(SCALER_PATH)
+            print("  Churn model loaded successfully.")
+        except Exception as e:
+            print(f"  WARNING: Churn model load failed: {e}")
+            _churn_model = _churn_scaler = None
+    else:
+        print("  WARNING: Churn model not found. Run ml/train_churn_model.py first.")
 
 
 # ============================================================
@@ -65,13 +76,16 @@ def predict_churn(customer_id):
         or None if customer not found
     """
 
+    # Lazy-load model on first call
+    _load_model()
+
     # --- Fetch customer ---
     customer = db.session.get(Customer, customer_id)
     if not customer:
         return None
 
     # --- Check if model is available ---
-    if churn_model is None or churn_scaler is None:
+    if _churn_model is None or _churn_scaler is None:
         # Fall back to rule-based prediction if model not trained
         return rule_based_churn(customer)
 
@@ -109,14 +123,14 @@ def predict_churn(customer_id):
     # --------------------------------------------------------
     # SCALE FEATURES (same scaler used in training)
     # --------------------------------------------------------
-    features_scaled = churn_scaler.transform(features)
+    features_scaled = _churn_scaler.transform(features)
 
     # --------------------------------------------------------
     # MAKE PREDICTION
     # predict_proba returns [probability_active, probability_churned]
     # We want the SECOND value → probability of churning
     # --------------------------------------------------------
-    probabilities = churn_model.predict_proba(features_scaled)[0]
+    probabilities = _churn_model.predict_proba(features_scaled)[0]
     churn_probability = round(float(probabilities[1]), 4)
 
     # --------------------------------------------------------
