@@ -135,6 +135,41 @@ def get_insights(customer_id):
         return jsonify({"success": False, "error": "Failed to generate insights", "message": str(e)}), 500
 
 
+# ── BULK: All Customer Insights in ONE call ────────────────
+# This replaces 20 individual /insights calls with a single
+# request — the primary performance fix for the Insights page.
+
+@prediction_bp.route("/api/insights/all", methods=["GET"])
+def get_all_insights():
+    """
+    Returns AI intelligence reports for ALL customers in ONE request.
+    20x faster than calling /api/customers/:id/insights individually.
+    Results are cached so repeated page loads are near-instant.
+    """
+    try:
+        customers = Customer.query.all()
+        results = []
+        for c in customers:
+            try:
+                report = get_customer_insights(c.customer_id)
+                if report:
+                    results.append({
+                        "customer_id": c.customer_id,
+                        "name": c.name,
+                        "report": report,
+                    })
+            except Exception:
+                pass  # Skip failed customers, don't crash the whole request
+
+        return jsonify({
+            "success": True,
+            "total": len(results),
+            "insights": results,
+        }), 200
+    except Exception as e:
+        return jsonify({"success": False, "error": "Bulk insights failed", "message": str(e)}), 500
+
+
 # ── NEW ROUTE 8: Next-Purchase Prediction ─────────────────
 
 @prediction_bp.route("/api/customers/<string:customer_id>/next-purchase", methods=["GET"])

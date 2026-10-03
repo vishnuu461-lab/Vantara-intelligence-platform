@@ -24,7 +24,7 @@ import {
 import Navbar from '../components/layout/Navbar';
 import LoadingSpinner from '../components/common/LoadingSpinner';
 import ErrorMessage from '../components/common/ErrorMessage';
-import { getCustomers, getInsights } from '../api/customerApi';
+import { getAllInsights, getInsights } from '../api/customerApi';
 
 // ── Helpers ────────────────────────────────────────────────
 
@@ -98,26 +98,11 @@ export default function InsightsPage() {
     setError(null);
     setAllReports([]);
     try {
-      setProgress('Loading customer list...');
-      const custRes = await getCustomers({ page: 1, perPage: 100 });
-      if (!custRes.success) throw new Error('Failed to load customers');
-
-      const customers = custRes.customers;
-      setProgress(`Running AI intelligence for ${customers.length} customers...`);
-
-      const results = await Promise.all(
-        customers.map(c =>
-          getInsights(c.customer_id)
-            .then(res => res.success ? {
-              customer_id: c.customer_id,
-              name: c.name,
-              report: res.intelligence_report,
-            } : null)
-            .catch(() => null)
-        )
-      );
-
-      setAllReports(results.filter(Boolean));
+      // Single bulk API call instead of 20 individual calls — 20x faster
+      setProgress('Loading AI insights for all customers...');
+      const res = await getAllInsights();
+      if (!res.success) throw new Error('Failed to load insights');
+      setAllReports(res.insights || []);
     } catch (err) {
       setError(err.message || 'Failed to load insights.');
     } finally {

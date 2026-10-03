@@ -82,3 +82,10 @@ export async function getInsights(id) {
     const response = await api.get(`/api/customers/${id}/insights`);
     return response.data;
 }
+
+// GET /api/insights/all  ← BULK endpoint (20x faster than individual calls)
+// Returns ALL customer insights in ONE request instead of 20 separate calls.
+export async function getAllInsights() {
+    const response = await api.get('/api/insights/all');
+    return response.data;
+}

@@ -60,21 +60,13 @@ def _load_model():
 def predict_churn(customer_id):
     """
     Predicts the churn probability for a specific customer.
-
-    Args:
-        customer_id (str): e.g., "C1001"
-
-    Returns:
-        dict: {
-            "customer_id": ...,
-            "churn_probability": 0.82,
-            "risk_level": "High",
-            "risk_color": "red",
-            "features_used": {...},
-            "explanation": "..."
-        }
-        or None if customer not found
+    Results are cached for 120 seconds to avoid recomputing on every request.
     """
+    from utils.cache import cache_get, cache_set
+    _cache_key = f"churn:{customer_id}"
+    cached = cache_get(_cache_key)
+    if cached is not None:
+        return cached
 
     # Lazy-load model on first call
     _load_model()
@@ -187,7 +179,7 @@ def predict_churn(customer_id):
 
     explanation = " ".join(explanation_parts)
 
-    return {
+    result = {
         "customer_id": customer_id,
         "name": customer.name,
         "churn_probability": churn_probability,
@@ -211,6 +203,9 @@ def predict_churn(customer_id):
             "Use alongside human judgment for business decisions."
         )
     }
+    cache_set(_cache_key, result)
+    return result
+
 
 
 # ============================================================

@@ -62,8 +62,8 @@ class Config:
     SQLALCHEMY_ENGINE_OPTIONS = {
         "pool_recycle": 280,       # Reconnect before MySQL's 5-min timeout
         "pool_pre_ping": True,     # Test connection before using it
-        "pool_size": 5,
-        "max_overflow": 2,
+        "pool_size": 10,           # Allow more simultaneous DB connections
+        "max_overflow": 5,         # Extra connections under peak load
     }
 
     # --- Application Port ---

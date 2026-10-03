@@ -34,19 +34,20 @@ from services.segmentation_service import assign_segment
 
 def get_customer_insights(customer_id):
     """
-    Generates a complete AI-powered intelligence report
-    for a single customer by combining all available data.
-
-    Args:
-        customer_id (str): e.g., "C1001"
-
-    Returns:
-        dict: Full intelligence report, or None if not found
+    Generates a complete AI-powered intelligence report for a single customer.
+    Results are cached for 120 seconds to avoid recomputing on every page load.
     """
+    from utils.cache import cache_get, cache_set
+    _cache_key = f"insights:{customer_id}"
+    cached = cache_get(_cache_key)
+    if cached is not None:
+        return cached
+
     # --- Fetch customer ---
     customer = db.session.get(Customer, customer_id)
     if not customer:
         return None
+
 
     # --------------------------------------------------------
     # STEP 1: Gather all analysis results
@@ -123,7 +124,7 @@ def get_customer_insights(customer_id):
     # --------------------------------------------------------
     # STEP 6: Build and return the full report
     # --------------------------------------------------------
-    return {
+    report = {
         "customer_id":   customer_id,
         "name":          customer.name,
         "email":         customer.email,
@@ -180,6 +181,8 @@ def get_customer_insights(customer_id):
             "important business decisions."
         )
     }
+    cache_set(_cache_key, report)
+    return report
 
 
 # ============================================================
