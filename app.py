@@ -191,8 +191,13 @@ app.register_blueprint(prediction_bp)
 app.register_blueprint(upload_bp)
 
 with app.app_context():
-    db.create_all()
-    print("  Tables: 'customers' and 'purchases' are ready.")
+    try:
+        db.create_all()
+        print("  Tables: 'customers' and 'purchases' are ready.")
+    except Exception as e:
+        print(f"  WARNING: Could not connect to database at startup: {e}")
+        print("  App will continue — DB will be retried on first request.")
+
 
 
 # ============================================================
