@@ -28,10 +28,18 @@ const getBaseURL = () => {
 
 const api = axios.create({
     baseURL: getBaseURL(),
-    timeout: 30000,   // 30 seconds — extra time for Render cold start wake-up
+    timeout: 60000,   // 60 seconds — handles Render free-tier cold start (30-60s wake time)
     headers: {
         'Content-Type': 'application/json',
     },
 });
+
+// ── Wake-up ping ──────────────────────────────────────────
+// Silently hit /api/health the moment this module loads so
+// Render starts warming up BEFORE the user fires any real
+// API request. If Render is already awake this is <200ms and
+// completely invisible. If it's sleeping, it starts waking
+// immediately so pages load faster when the user navigates.
+api.get('/api/health', { timeout: 65000 }).catch(() => { });
 
 export default api;
