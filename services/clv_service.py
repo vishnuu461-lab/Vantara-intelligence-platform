@@ -52,132 +52,121 @@ def _load_model():
 
 def predict_clv(customer_id):
     """
-    Predicts the Customer Lifetime Value for a given customer.
+    Predicts Customer Lifetime Value using an analytical formula
+    based on each customer's actual purchase behavior.
 
-    CLV = Estimated total revenue this customer will generate
-          in the next 12 months (approximately).
+    Formula:
+        CLV = avg_order_value × orders_per_year × lifetime_years
+              × recency_factor × complaint_factor
 
-    Args:
-        customer_id (str): e.g., "C1001"
-
-    Returns:
-        dict with predicted_clv and supporting context
+    This gives meaningfully different values for each customer
+    based on their real data (spend, frequency, subscription, recency).
     """
-    # Lazy-load model on first call
-    _load_model()
+    from utils.cache import cache_get, cache_set
+    _cache_key = f"clv:{customer_id}"
+    cached = cache_get(_cache_key)
+    if cached is not None:
+        return cached
 
     # --- Fetch customer ---
     customer = db.session.get(Customer, customer_id)
     if not customer:
         return None
 
-    # --- Fallback if model not loaded ---
-    if _clv_model is None or _clv_scaler is None:
-        return formula_based_clv(customer)
-
     today = date.today()
 
-    # --------------------------------------------------------
-    # CALCULATE FEATURES
-    # Same order and logic as training!
-    # --------------------------------------------------------
-
+    # ── Core metrics ──────────────────────────────────────────
+    avg_order   = customer.average_order_value or 0
     total_orders = customer.total_orders or 0
-    total_spend  = customer.total_spend or 0
-    avg_order_value = customer.average_order_value or 0
+    complaints  = customer.complaints or 0
 
     # Days since last purchase
     if customer.last_purchase_date:
         days_since_last = (today - customer.last_purchase_date).days
     else:
-        days_since_last = 365
+        days_since_last = 730  # Never bought → treat as very inactive
 
-    # purchases_per_month: calculate from purchase history
+    # ── Orders per year (from actual purchase history) ────────
     first_purchase = db.session.query(
         func.min(Purchase.purchase_date)
     ).filter(Purchase.customer_id == customer_id).scalar()
 
     if first_purchase and total_orders > 0:
-        months_active = max((today - first_purchase).days / 30, 1)
-        purchases_per_month = round(total_orders / months_active, 4)
+        months_active = max((today - first_purchase).days / 30.0, 1)
+        orders_per_year = round((total_orders / months_active) * 12, 2)
     else:
-        purchases_per_month = 0.0
+        orders_per_year = max(total_orders, 1)  # At least 1/year
 
-    # subscription_active flag
-    subscription_active = (
-        1 if customer.subscription_status in ["Active", "Premium"] else 0
+    orders_per_year = min(orders_per_year, 52)  # Cap at weekly purchases
+
+    # ── Customer Lifetime estimate (years) ────────────────────
+    # Based on subscription tier — Premium customers stay longer
+    sub = customer.subscription_status or ""
+    if sub == "Premium":
+        lifetime_years = 4.5
+    elif sub == "Active":
+        lifetime_years = 3.0
+    elif sub == "Inactive":
+        lifetime_years = 1.5
+    else:  # Cancelled or unknown
+        lifetime_years = 0.8
+
+    # ── Recency factor (how recently they purchased) ──────────
+    if days_since_last <= 30:
+        recency_factor = 1.30   # Very recent — highly engaged
+    elif days_since_last <= 90:
+        recency_factor = 1.15
+    elif days_since_last <= 180:
+        recency_factor = 1.00
+    elif days_since_last <= 365:
+        recency_factor = 0.75   # Fading engagement
+    elif days_since_last <= 730:
+        recency_factor = 0.50   # At risk
+    else:
+        recency_factor = 0.25   # Near-lost customer
+
+    # ── Complaint penalty ─────────────────────────────────────
+    # Every complaint reduces expected CLV (satisfaction hurt)
+    complaint_factor = max(0.40, 1.0 - (complaints * 0.12))
+
+    # ── Calculate CLV ─────────────────────────────────────────
+    predicted_clv = (
+        avg_order
+        * orders_per_year
+        * lifetime_years
+        * recency_factor
+        * complaint_factor
     )
+    predicted_clv = max(0, round(predicted_clv, 2))
 
-    features = np.array([[
-        total_orders,
-        total_spend,
-        avg_order_value,
-        customer.website_visits or 0,
-        customer.complaints or 0,
-        subscription_active,
-        days_since_last,
-        purchases_per_month
-    ]])
-
-    # Scale and predict
-    features_scaled = _clv_scaler.transform(features)
-    predicted_clv   = float(_clv_model.predict(features_scaled)[0])
-    predicted_clv   = max(0, round(predicted_clv, 2))  # No negative CLV
-
-    # --------------------------------------------------------
-    # CLV TIER CLASSIFICATION
-    # --------------------------------------------------------
+    # ── CLV Tier ──────────────────────────────────────────────
     if predicted_clv >= 100000:
-        clv_tier   = "Platinum"
-        clv_color  = "purple"
-        clv_action = (
-            "Extremely high-value customer. Offer VIP treatment, "
-            "exclusive deals, and a dedicated account manager."
-        )
+        clv_tier, clv_color = "Platinum", "purple"
+        clv_action = "Extremely high-value. Offer VIP treatment and a dedicated account manager."
     elif predicted_clv >= 50000:
-        clv_tier   = "Gold"
-        clv_color  = "gold"
-        clv_action = (
-            "High-value customer. Prioritize retention with "
-            "loyalty rewards and personalized offers."
-        )
+        clv_tier, clv_color = "Gold", "gold"
+        clv_action = "High-value customer. Prioritize retention with loyalty rewards and personalized offers."
     elif predicted_clv >= 20000:
-        clv_tier   = "Silver"
-        clv_color  = "silver"
-        clv_action = (
-            "Medium-value customer. Encourage more purchases "
-            "through targeted promotions and upselling."
-        )
+        clv_tier, clv_color = "Silver", "silver"
+        clv_action = "Medium-value. Encourage more purchases through targeted promotions."
     elif predicted_clv >= 5000:
-        clv_tier   = "Bronze"
-        clv_color  = "brown"
-        clv_action = (
-            "Lower-value customer. Use low-cost retention "
-            "strategies like email campaigns and small discounts."
-        )
+        clv_tier, clv_color = "Bronze", "brown"
+        clv_action = "Lower-value. Use email campaigns and small discounts to re-engage."
     else:
-        clv_tier   = "Entry"
-        clv_color  = "gray"
-        clv_action = (
-            "Very low predicted value. Focus on understanding "
-            "why engagement is low and offer a first-purchase incentive."
-        )
+        clv_tier, clv_color = "Entry", "gray"
+        clv_action = "Very low predicted value. Offer a first-purchase incentive to boost engagement."
 
-    # --------------------------------------------------------
-    # CONTEXT: Compare to average
-    # --------------------------------------------------------
-    avg_spend_result = db.session.query(
-        func.avg(Customer.total_spend)
-    ).scalar()
+    # ── Context: compare to average ───────────────────────────
+    avg_spend_result = db.session.query(func.avg(Customer.total_spend)).scalar()
     avg_spend = round(avg_spend_result or 0, 2)
-
+    total_spend = customer.total_spend or 0
     comparison = (
         f"Above average (avg: Rs.{avg_spend:,.0f})"
         if total_spend >= avg_spend
         else f"Below average (avg: Rs.{avg_spend:,.0f})"
     )
 
-    return {
+    result = {
         "customer_id":    customer_id,
         "name":           customer.name,
         "predicted_clv":  predicted_clv,
@@ -186,57 +175,56 @@ def predict_clv(customer_id):
         "clv_color":      clv_color,
         "recommended_action": clv_action,
         "context": {
-            "current_total_spend":       total_spend,
-            "current_spend_vs_average":  comparison,
-            "purchases_per_month":       purchases_per_month,
-            "subscription_status":       customer.subscription_status,
-            "days_since_last_purchase":  days_since_last,
+            "current_total_spend":      total_spend,
+            "current_spend_vs_average": comparison,
+            "orders_per_year":          orders_per_year,
+            "lifetime_estimate_years":  lifetime_years,
+            "recency_factor":           recency_factor,
+            "complaint_factor":         complaint_factor,
+            "subscription_status":      customer.subscription_status,
+            "days_since_last_purchase": days_since_last,
         },
         "features_used": {
+            "avg_order_value":     avg_order,
+            "orders_per_year":     orders_per_year,
+            "lifetime_years":      lifetime_years,
+            "recency_factor":      recency_factor,
+            "complaint_factor":    complaint_factor,
             "total_orders":        total_orders,
-            "total_spend":         total_spend,
-            "avg_order_value":     avg_order_value,
-            "website_visits":      customer.website_visits or 0,
-            "complaints":          customer.complaints or 0,
-            "subscription_active": subscription_active,
             "days_since_last":     days_since_last,
-            "purchases_per_month": purchases_per_month,
         },
-        "model_used":  "Random Forest Regressor",
+        "model_used":  "Analytical CLV Formula (RFM-based)",
         "disclaimer": (
-            "CLV is a statistical estimate for the next ~12 months. "
-            "Actual revenue depends on future customer behavior, "
-            "market conditions, and business strategy. Use this as "
-            "a guide, not a guarantee."
+            "CLV is estimated using avg_order_value × purchase_frequency × "
+            "lifetime_years × recency_factor × complaint_factor. "
+            "Use as a guide for retention prioritization."
         )
     }
-
+    cache_set(_cache_key, result)
+    return result
 
 # ============================================================
-# FALLBACK: Formula-Based CLV
+# FALLBACK: Formula-Based CLV (kept as utility)
 # ============================================================
 
 def formula_based_clv(customer):
-    """
-    Simple formula-based CLV when ML model is not available.
-    Formula: avg_order_value * orders_per_year * estimated_years
-    """
+    """Simple formula-based CLV fallback."""
     avg_order = customer.average_order_value or 0
     orders    = customer.total_orders or 0
-
-    orders_per_year = min(orders, 24)    # Cap at 24 per year
-    estimated_years = 2.0                # Assume 2-year horizon
-
-    if customer.subscription_status == "Premium":  estimated_years = 3.0
-    elif customer.subscription_status in ["Inactive", "Cancelled"]: estimated_years = 0.5
-
+    orders_per_year = min(orders, 24)
+    estimated_years = 2.0
+    if customer.subscription_status == "Premium":
+        estimated_years = 3.0
+    elif customer.subscription_status in ["Inactive", "Cancelled"]:
+        estimated_years = 0.5
     predicted_clv = round(avg_order * orders_per_year * estimated_years, 2)
-
     return {
-        "customer_id":    customer.customer_id,
-        "name":           customer.name,
-        "predicted_clv":  predicted_clv,
+        "customer_id":             customer.customer_id,
+        "name":                    customer.name,
+        "predicted_clv":           predicted_clv,
         "predicted_clv_formatted": f"Rs.{predicted_clv:,.0f}",
-        "model_used":  "Formula-Based (ML model not trained yet)",
-        "disclaimer": "Run ml/train_clv_model.py for ML-based predictions."
+        "clv_tier":                "Bronze",
+        "clv_color":               "brown",
+        "model_used":              "Formula-Based",
+        "disclaimer":              "Simplified estimate.",
     }
