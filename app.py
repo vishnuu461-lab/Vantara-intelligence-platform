@@ -117,6 +117,43 @@ def seed_db():
         }), 500
 
 
+@app.route("/api/reseed-db")
+def reseed_db():
+    """
+    Force re-seed: clears ALL data and reseeds fresh.
+    Use this to refresh stale dates after updating seed_data.py.
+    """
+    try:
+        from models.customer import Customer
+        from models.purchase import Purchase
+        from data.seed_data import SAMPLE_CUSTOMERS, SAMPLE_PURCHASES
+
+        # Clear existing data
+        Purchase.query.delete()
+        Customer.query.delete()
+        db.session.commit()
+
+        # Reseed fresh
+        for data in SAMPLE_CUSTOMERS:
+            db.session.add(Customer(**data))
+        db.session.commit()
+
+        for data in SAMPLE_PURCHASES:
+            db.session.add(Purchase(**data))
+        db.session.commit()
+
+        return jsonify({
+            "status": "success",
+            "message": "Database cleared and reseeded with fresh dates!",
+            "customers": Customer.query.count(),
+            "purchases": Purchase.query.count(),
+        }), 200
+
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
 
 @app.route("/api/db-test")
 def db_test():
