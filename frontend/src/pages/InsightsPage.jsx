@@ -199,7 +199,14 @@ export default function InsightsPage() {
     <>
       <Navbar pageTitle="Insights" pageSubtitle="Fleet-level AI intelligence" />
       <div className="page-body">
-        <LoadingSpinner message={progress || 'Running AI analysis...'} />
+        <LoadingSpinner message={progress || 'Running AI analysis for all customers...'} />
+        <p style={{
+          textAlign: 'center', color: 'var(--text-muted)',
+          fontSize: 13, marginTop: 8
+        }}>
+          ⏳ First load may take up to 60 seconds — ML models are computing predictions for every customer.
+          Subsequent visits load instantly from cache.
+        </p>
       </div>
     </>
   );

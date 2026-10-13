@@ -1,0 +1,14 @@
+test,status,detail
+POST /api/upload (batch),PASS,inserted=124 dupes=5753
+GET /api/customers,PASS,3 records
+GET /api/customers/{id},PASS,id=12346
+Churn prediction,PARTIAL,pass=19 fail=1
+CLV prediction,PASS,pass=20 fail=0
+Segmentation,PASS,pass=20 fail=0
+Next-purchase predict,PASS,pass=20 fail=0
+Dashboard,PASS,HTTP 200
+Analysis summary,PASS,HTTP 200
+All segments,PASS,HTTP 200
+Model info,PASS,HTTP 200
+All anomalies,ERROR,"HTTPConnectionPool(host='localhost', port=5000): Read timed out. (read timeout=15)"
+Churn quality (sample),PASS,accuracy=52.63% F1=0.000

@@ -85,7 +85,12 @@ export async function getInsights(id) {
 
 // GET /api/insights/all  ← BULK endpoint (20x faster than individual calls)
 // Returns ALL customer insights in ONE request instead of 20 separate calls.
+// Uses a 90-second timeout — first call on Render free tier can take 30-60s
+// because it runs ML inference for every customer. After first call, the
+// server-side cache makes subsequent calls respond in <1 second.
 export async function getAllInsights() {
-    const response = await api.get('/api/insights/all');
+    const response = await api.get('/api/insights/all', {
+        timeout: 90000,   // 90 seconds — handles Render cold compute
+    });
     return response.data;
 }

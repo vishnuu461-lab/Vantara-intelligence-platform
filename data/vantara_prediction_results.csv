@@ -1,0 +1,21 @@
+customer_id,name,total_spend,total_orders,subscription_status,_churned_label,_recency_days,churn_prob,churn_risk,churn_model,clv_1yr,clv_3yr,clv_segment,segment,segment_label,next_purchase,days_to_next
+17777,Olivia Wilson,665.86,3,Active,0,24,"HTTPConnectionPool(host='localhost', por",—,—,16781.44,?,?,High Risk,?,?,?
+16719,Ella Thompson,3973.3,14,Premium,0,14,0.0058,Low,Random Forest Classifier,16781.44,?,?,High Risk,?,?,?
+12546,Mia Hughes,1161.5,2,Active,0,46,0.0073,Low,Random Forest Classifier,16781.44,?,?,High Risk,?,?,?
+17484,Mason Morris,209.57,2,Active,1,575,0.0059,Low,Random Forest Classifier,16781.44,?,?,High Risk,?,?,?
+17207,Mason Scott,303.22,1,Active,1,651,0.0045,Low,Random Forest Classifier,16781.44,?,?,High Risk,?,?,?
+17733,Daniel Evans,692.19,2,Active,0,38,0.0097,Low,Random Forest Classifier,16781.44,?,?,High Risk,?,?,?
+14713,Amelia Smith,5418.87,21,Premium,0,8,0.0033,Low,Random Forest Classifier,16781.44,?,?,High Risk,?,?,?
+13976,Zoe Thomas,1192.36,4,Active,1,206,0.0033,Low,Random Forest Classifier,16781.44,?,?,High Risk,?,?,?
+18163,Grace White,728.84,1,Active,1,583,0.0018,Low,Random Forest Classifier,16781.44,?,?,Inactive,?,?,?
+14570,George Evans,613.75,3,Active,1,280,0.0051,Low,Random Forest Classifier,16781.44,?,?,High Risk,?,?,?
+14198,George Scott,1569.73,9,Premium,0,17,0.0052,Low,Random Forest Classifier,16781.44,?,?,High Risk,?,?,?
+17767,Zoe Wilson,413.05,2,Active,0,14,0.0031,Low,Random Forest Classifier,16781.44,?,?,Inactive,?,?,?
+15693,Mason Smith,37.5,1,Active,1,658,0.0043,Low,Random Forest Classifier,16781.44,?,?,High Risk,?,?,?
+18104,George Green,754.64,1,Active,0,36,0.0062,Low,Random Forest Classifier,16781.44,?,?,High Risk,?,?,?
+15317,Zoe Thomas,129.75,1,Active,1,676,0.0026,Low,Random Forest Classifier,16781.44,?,?,High Risk,?,?,?
+15909,Isabella Brown,191.94,1,Active,1,173,0.0058,Low,Random Forest Classifier,16781.44,?,?,High Risk,?,?,?
+14015,Charlie Wright,917.34,1,Active,0,52,0.0079,Low,Random Forest Classifier,16781.44,?,?,High Risk,?,?,?
+15673,Emma Thomas,6414.79,9,Premium,0,87,0.0037,Low,Random Forest Classifier,16781.44,?,?,High Risk,?,?,?
+16468,Mia Turner,787.52,3,Active,0,73,0.0046,Low,Random Forest Classifier,16781.44,?,?,High Risk,?,?,?
+17292,Lucas Bell,271.75,2,Active,1,471,0.0042,Low,Random Forest Classifier,16781.44,?,?,High Risk,?,?,?

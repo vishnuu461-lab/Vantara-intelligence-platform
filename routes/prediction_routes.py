@@ -144,8 +144,18 @@ def get_all_insights():
     """
     Returns AI intelligence reports for ALL customers in ONE request.
     20x faster than calling /api/customers/:id/insights individually.
-    Results are cached so repeated page loads are near-instant.
+
+    First call: computes ML for all customers (~30-60s on Render free tier).
+    Subsequent calls within 120s: returns instantly from cache.
     """
+    from utils.cache import cache_get, cache_set
+    _bulk_cache_key = "bulk:insights:all"
+
+    # Return cached bulk result if available (near-instant)
+    cached_bulk = cache_get(_bulk_cache_key)
+    if cached_bulk is not None:
+        return jsonify(cached_bulk), 200
+
     try:
         customers = Customer.query.all()
         results = []
@@ -161,11 +171,14 @@ def get_all_insights():
             except Exception:
                 pass  # Skip failed customers, don't crash the whole request
 
-        return jsonify({
+        response_data = {
             "success": True,
             "total": len(results),
             "insights": results,
-        }), 200
+        }
+        # Cache the entire bulk response for 120 seconds
+        cache_set(_bulk_cache_key, response_data, ttl=120)
+        return jsonify(response_data), 200
     except Exception as e:
         return jsonify({"success": False, "error": "Bulk insights failed", "message": str(e)}), 500
 
