@@ -58,12 +58,20 @@ class Config:
     # --- SQLAlchemy Settings ---
     SQLALCHEMY_TRACK_MODIFICATIONS = False
 
-    # Pool settings for production stability
+    # Pool + SSL settings for TiDB Cloud (and regular MySQL)
+    # TiDB Cloud Serverless requires SSL — we use the system CA bundle
+    # which is always present on Render's Linux servers.
+    _ssl_ca = "/etc/ssl/certs/ca-certificates.crt"
+    _use_ssl = os.path.exists(_ssl_ca)   # True on Render/Linux, False on Windows dev
+
     SQLALCHEMY_ENGINE_OPTIONS = {
-        "pool_recycle": 280,       # Reconnect before MySQL's 5-min timeout
-        "pool_pre_ping": True,     # Test connection before using it
-        "pool_size": 10,           # Allow more simultaneous DB connections
-        "max_overflow": 5,         # Extra connections under peak load
+        "pool_recycle": 280,
+        "pool_pre_ping": True,
+        "pool_size": 10,
+        "max_overflow": 5,
+        "connect_args": {
+            "ssl": {"ca": _ssl_ca} if _use_ssl else {},
+        } if _use_ssl else {},
     }
 
     # --- Application Port ---
