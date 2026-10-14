@@ -1,15 +1,9 @@
 ﻿// ============================================================
-// ChurnPage.jsx — ML Churn Risk Predictions for All Customers
+// ChurnPage.jsx — ML Churn Risk Predictions
 // ============================================================
-// Strategy:
-//   Step 1: GET /api/customers?per_page=100  → all customer IDs
-//   Step 2: Promise.all( GET /api/customers/:id/churn for each )
-//   This runs all predictions simultaneously (parallel), not one
-//   by one, so it completes in ~2-3 seconds for 27 customers.
-//
-// Churn API response per customer:
-//   { success, customer_id, churn_probability, percentage,
-//     risk_level, model_used, factors }
+// Clicking a customer row opens a churn-specific detail drawer
+// WITHIN this page. Navigation to /customers/:id only happens
+// via the explicit "View Full Customer Profile" button.
 // ============================================================
 
 import { useState, useEffect } from 'react';
@@ -22,21 +16,20 @@ import {
 import Navbar from '../components/layout/Navbar';
 import LoadingSpinner from '../components/common/LoadingSpinner';
 import ErrorMessage from '../components/common/ErrorMessage';
+import DetailDrawer from '../components/common/DetailDrawer';
 import { getCustomers, getChurnPrediction } from '../api/customerApi';
 
 // ── Config ─────────────────────────────────────────────────
 
 const RISK_CONFIG = {
-  High: { color: '#ef4444', badgeClass: 'badge-red', icon: '🔴', bg: 'var(--danger-light)', text: '#dc2626' },
-  Medium: { color: '#f59e0b', badgeClass: 'badge-amber', icon: '🟡', bg: 'var(--warning-light)', text: '#d97706' },
-  Low: { color: '#10b981', badgeClass: 'badge-green', icon: '🟢', bg: 'var(--success-light)', text: '#059669' },
+  High: { color: '#ef4444', badgeClass: 'badge-red', icon: '🔴', bg: '#fef2f2' },
+  Medium: { color: '#f59e0b', badgeClass: 'badge-amber', icon: '🟡', bg: '#fffbeb' },
+  Low: { color: '#10b981', badgeClass: 'badge-green', icon: '🟢', bg: '#f0fdf4' },
 };
 
 function getRiskCfg(level) {
   return RISK_CONFIG[level] || RISK_CONFIG.Low;
 }
-
-// ── Helpers ────────────────────────────────────────────────
 
 function formatRupee(v) {
   if (!v && v !== 0) return '—';
@@ -52,42 +45,155 @@ function formatDate(d) {
   });
 }
 
+// ── Churn Drawer Content ───────────────────────────────────
+
+function ChurnDrawerContent({ row }) {
+  if (!row) return null;
+  const cfg = getRiskCfg(row.risk_level);
+  const pctNum = row.churn_probability != null ? Math.round(row.churn_probability * 100) : 0;
+
+  return (
+    <>
+      {/* Risk badge + probability hero */}
+      <div style={{
+        background: cfg.bg,
+        border: `1px solid ${cfg.color}30`,
+        borderRadius: 12, padding: '20px 20px', marginBottom: 20,
+        textAlign: 'center',
+      }}>
+        <div style={{ fontSize: 13, color: cfg.color, fontWeight: 700, marginBottom: 8 }}>
+          {cfg.icon} {row.risk_level} RISK
+        </div>
+        <div style={{ fontSize: 52, fontWeight: 900, color: cfg.color, lineHeight: 1 }}>
+          {row.percentage}
+        </div>
+        <div style={{ fontSize: 13, color: '#64748b', marginTop: 6 }}>
+          Churn Probability
+        </div>
+
+        {/* Risk bar */}
+        <div style={{
+          background: '#e2e8f0', borderRadius: 999,
+          height: 10, overflow: 'hidden', margin: '16px 0 0',
+        }}>
+          <div style={{
+            width: `${pctNum}%`, height: '100%',
+            background: cfg.color, borderRadius: 999,
+            transition: 'width 0.6s ease',
+          }} />
+        </div>
+      </div>
+
+      {/* Key metrics */}
+      <div className="drawer-metrics">
+        <div className="drawer-metric">
+          <div className="drawer-metric-label">Total Spend</div>
+          <div className="drawer-metric-value" style={{ color: '#10b981' }}>
+            {formatRupee(row.total_spend)}
+          </div>
+        </div>
+        <div className="drawer-metric">
+          <div className="drawer-metric-label">Total Orders</div>
+          <div className="drawer-metric-value">{row.total_orders ?? '—'}</div>
+        </div>
+        <div className="drawer-metric">
+          <div className="drawer-metric-label">Last Purchase</div>
+          <div className="drawer-metric-value" style={{ fontSize: 13 }}>
+            {formatDate(row.last_purchase_date)}
+          </div>
+        </div>
+        <div className="drawer-metric">
+          <div className="drawer-metric-label">Complaints</div>
+          <div className="drawer-metric-value" style={{ color: row.complaints > 0 ? '#ef4444' : '#10b981' }}>
+            {row.complaints > 0 ? `⚠ ${row.complaints}` : '✓ None'}
+          </div>
+        </div>
+      </div>
+
+      {/* Subscription + location */}
+      <div style={{ display: 'flex', gap: 8, marginBottom: 20, flexWrap: 'wrap' }}>
+        <span className={`badge ${row.subscription_status === 'Premium' ? 'badge-indigo' :
+            row.subscription_status === 'Active' ? 'badge-green' :
+              row.subscription_status === 'Inactive' ? 'badge-amber' : 'badge-red'
+          }`}>
+          {row.subscription_status}
+        </span>
+        {row.location && (
+          <span className="badge badge-gray">📍 {row.location}</span>
+        )}
+      </div>
+
+      {/* Risk Factors */}
+      {row.factors && row.factors.length > 0 && (
+        <>
+          <div className="drawer-section-title">⚡ Risk Factors</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 20 }}>
+            {row.factors.map((f, i) => (
+              <div key={i} style={{
+                background: '#fef2f2',
+                border: '1px solid #fecaca',
+                borderRadius: 8, padding: '10px 14px',
+                fontSize: 13, color: '#991b1b',
+              }}>
+                {typeof f === 'string' ? f : (f.description || f.factor || JSON.stringify(f))}
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+
+      {/* Retention Recommendation */}
+      <div className="drawer-section-title">💡 Retention Recommendation</div>
+      <div style={{
+        background: '#f0fdf4', border: '1px solid #bbf7d0',
+        borderRadius: 8, padding: '14px 16px',
+        fontSize: 13, color: '#166534', lineHeight: 1.6,
+      }}>
+        {row.risk_level === 'High'
+          ? 'Immediate action needed: reach out personally, offer exclusive retention discount, and assign account manager.'
+          : row.risk_level === 'Medium'
+            ? 'Monitor engagement closely. Send targeted reactivation campaign with personalized offers.'
+            : 'Customer is healthy. Maintain regular touchpoints and reward loyalty.'
+        }
+      </div>
+    </>
+  );
+}
+
 // ── Main Component ─────────────────────────────────────────
 
 export default function ChurnPage() {
   const navigate = useNavigate();
 
-  const [rows, setRows] = useState([]);   // merged customer + churn data
+  const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [progress, setProgress] = useState('');   // status message while loading
+  const [progress, setProgress] = useState('');
   const [error, setError] = useState(null);
-  const [filterRisk, setFilterRisk] = useState(''); // 'High' | 'Medium' | 'Low' | ''
+  const [filterRisk, setFilterRisk] = useState('');
+
+  // ── Drawer state ───────────────────────────────────────
+  const [selectedRow, setSelectedRow] = useState(null);
 
   const fetchAll = async () => {
     setLoading(true);
     setError(null);
     setRows([]);
-
     try {
-      // ── Step 1: Load all customers ──────────────────────
       setProgress('Loading customer list...');
       const custRes = await getCustomers({ page: 1, perPage: 100 });
       if (!custRes.success) throw new Error('Failed to load customers');
 
       const customers = custRes.customers;
-
-      // ── Step 2: Run churn predictions in parallel ───────
       setProgress(`Running churn ML model for ${customers.length} customers...`);
 
       const churnResults = await Promise.all(
         customers.map(c =>
           getChurnPrediction(c.customer_id)
             .then(res => res.success ? res : null)
-            .catch(() => null)   // don't fail all if one errors
+            .catch(() => null)
         )
       );
 
-      // ── Step 3: Merge customer + churn data ─────────────
       const merged = customers.map((c, i) => {
         const churn = churnResults[i];
         return {
@@ -99,7 +205,6 @@ export default function ChurnPage() {
         };
       });
 
-      // Sort: High risk first, then by churn_probability descending
       merged.sort((a, b) => {
         const order = { High: 0, Medium: 1, Low: 2, Unknown: 3 };
         const diff = (order[a.risk_level] ?? 3) - (order[b.risk_level] ?? 3);
@@ -118,7 +223,6 @@ export default function ChurnPage() {
 
   useEffect(() => { fetchAll(); }, []);
 
-  // ── Loading ──────────────────────────────────────────────
   if (loading) return (
     <>
       <Navbar pageTitle="Churn Prediction" pageSubtitle="ML-based churn risk analysis" />
@@ -128,7 +232,6 @@ export default function ChurnPage() {
     </>
   );
 
-  // ── Error ────────────────────────────────────────────────
   if (error) return (
     <>
       <Navbar pageTitle="Churn Prediction" pageSubtitle="ML-based churn risk analysis" />
@@ -137,8 +240,6 @@ export default function ChurnPage() {
       </div>
     </>
   );
-
-  // ── Derived stats ────────────────────────────────────────
 
   const highCount = rows.filter(r => r.risk_level === 'High').length;
   const medCount = rows.filter(r => r.risk_level === 'Medium').length;
@@ -149,26 +250,19 @@ export default function ChurnPage() {
     ? (rows.reduce((s, r) => s + (r.churn_probability ?? 0), 0) / total * 100).toFixed(1)
     : '—';
 
-  // Pie chart data
   const pieData = [
     { name: 'High Risk', value: highCount, color: '#ef4444' },
     { name: 'Medium Risk', value: medCount, color: '#f59e0b' },
     { name: 'Low Risk', value: lowCount, color: '#10b981' },
   ].filter(d => d.value > 0);
 
-  // Bar chart — top 10 by churn probability
   const barData = rows.slice(0, 10).map(r => ({
-    name: r.name?.split(' ')[0] || r.customer_id,  // first name only
-    pct: r.churn_probability != null
-      ? Math.round(r.churn_probability * 100) : 0,
+    name: r.name?.split(' ')[0] || r.customer_id,
+    pct: r.churn_probability != null ? Math.round(r.churn_probability * 100) : 0,
   }));
 
-  // Filtered table rows
-  const displayedRows = filterRisk
-    ? rows.filter(r => r.risk_level === filterRisk)
-    : rows;
+  const displayedRows = filterRisk ? rows.filter(r => r.risk_level === filterRisk) : rows;
 
-  // ── Render ───────────────────────────────────────────────
   return (
     <>
       <Navbar
@@ -178,18 +272,16 @@ export default function ChurnPage() {
 
       <div className="page-body">
 
-        {/* ── Page Header ── */}
+        {/* Page Header */}
         <div className="page-header">
           <div>
             <h1>Churn Risk Analysis</h1>
             <p>Random Forest ML model predicting likelihood of customer churn</p>
           </div>
-          <button className="btn btn-outline btn-sm" onClick={fetchAll}>
-            🔄 Refresh
-          </button>
+          <button className="btn btn-outline btn-sm" onClick={fetchAll}>🔄 Refresh</button>
         </div>
 
-        {/* ── STAT CARDS ── */}
+        {/* STAT CARDS */}
         <div className="stats-grid" style={{ marginBottom: 24 }}>
           <div className="stat-card" style={{ cursor: 'pointer' }}
             onClick={() => setFilterRisk(filterRisk === 'High' ? '' : 'High')}>
@@ -200,7 +292,6 @@ export default function ChurnPage() {
               <div className="stat-sub">Immediate action needed</div>
             </div>
           </div>
-
           <div className="stat-card" style={{ cursor: 'pointer' }}
             onClick={() => setFilterRisk(filterRisk === 'Medium' ? '' : 'Medium')}>
             <div className="stat-icon amber">🟡</div>
@@ -210,7 +301,6 @@ export default function ChurnPage() {
               <div className="stat-sub">Monitor closely</div>
             </div>
           </div>
-
           <div className="stat-card" style={{ cursor: 'pointer' }}
             onClick={() => setFilterRisk(filterRisk === 'Low' ? '' : 'Low')}>
             <div className="stat-icon green">🟢</div>
@@ -220,7 +310,6 @@ export default function ChurnPage() {
               <div className="stat-sub">Healthy customers</div>
             </div>
           </div>
-
           <div className="stat-card">
             <div className="stat-icon indigo">📊</div>
             <div className="stat-info">
@@ -231,10 +320,8 @@ export default function ChurnPage() {
           </div>
         </div>
 
-        {/* ── CHARTS ROW ── */}
+        {/* CHARTS */}
         <div className="grid-2" style={{ marginBottom: 24 }}>
-
-          {/* Pie: Risk distribution */}
           <div className="card">
             <div className="card-header">
               <div>
@@ -245,14 +332,10 @@ export default function ChurnPage() {
             <div className="card-body">
               <ResponsiveContainer width="100%" height={240}>
                 <PieChart>
-                  <Pie
-                    data={pieData} cx="50%" cy="50%"
+                  <Pie data={pieData} cx="50%" cy="50%"
                     outerRadius={95} innerRadius={55}
                     paddingAngle={3} dataKey="value"
-                    label={({ name, percent }) =>
-                      `${name} ${(percent * 100).toFixed(0)}%`
-                    }
-                  >
+                    label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}>
                     {pieData.map((e, i) => <Cell key={i} fill={e.color} />)}
                   </Pie>
                   <Tooltip formatter={(v) => [`${v} customers`]} />
@@ -262,12 +345,11 @@ export default function ChurnPage() {
             </div>
           </div>
 
-          {/* Bar: Top 10 highest risk */}
           <div className="card">
             <div className="card-header">
               <div>
                 <div className="card-title">Top 10 Highest Churn Risk</div>
-                <div className="card-subtitle">Churn probability (%)</div>
+                <div className="card-subtitle">Click a row in the table below to see details</div>
               </div>
             </div>
             <div className="card-body">
@@ -281,18 +363,16 @@ export default function ChurnPage() {
                   <Bar dataKey="pct" radius={[4, 4, 0, 0]}>
                     {barData.map((entry, i) => (
                       <Cell key={i}
-                        fill={entry.pct >= 60 ? '#ef4444' :
-                          entry.pct >= 35 ? '#f59e0b' : '#10b981'} />
+                        fill={entry.pct >= 60 ? '#ef4444' : entry.pct >= 35 ? '#f59e0b' : '#10b981'} />
                     ))}
                   </Bar>
                 </BarChart>
               </ResponsiveContainer>
             </div>
           </div>
-
         </div>
 
-        {/* ── TABLE ── */}
+        {/* TABLE */}
         <div className="card">
           <div className="card-header">
             <div>
@@ -305,11 +385,12 @@ export default function ChurnPage() {
                   </span>
                 )}
               </div>
-              <div className="card-subtitle">Sorted by highest risk first</div>
+              <div className="card-subtitle">
+                Click any row to view churn details · Sorted by highest risk first
+              </div>
             </div>
             {filterRisk && (
-              <button className="btn btn-outline btn-sm"
-                onClick={() => setFilterRisk('')}>
+              <button className="btn btn-outline btn-sm" onClick={() => setFilterRisk('')}>
                 ✕ Clear filter
               </button>
             )}
@@ -328,7 +409,7 @@ export default function ChurnPage() {
                   <th>Total Spend</th>
                   <th>Last Purchase</th>
                   <th>Complaints</th>
-                  <th>Action</th>
+                  <th>Details</th>
                 </tr>
               </thead>
               <tbody>
@@ -338,78 +419,68 @@ export default function ChurnPage() {
                     ? Math.round(r.churn_probability * 100) : 0;
 
                   return (
-                    <tr key={r.customer_id}>
+                    <tr
+                      key={r.customer_id}
+                      style={{
+                        cursor: 'pointer',
+                        background: selectedRow?.customer_id === r.customer_id
+                          ? cfg.bg : undefined,
+                      }}
+                      onClick={() => setSelectedRow(r)}
+                    >
                       <td>
                         <div style={{ fontWeight: 600 }}>{r.name}</div>
-                        <div className="td-muted" style={{ fontSize: 11 }}>
-                          {r.customer_id}
-                        </div>
+                        <div className="td-muted" style={{ fontSize: 11 }}>{r.customer_id}</div>
                       </td>
-
                       <td className="td-muted">📍 {r.location || '—'}</td>
-
                       <td>
                         <span className={`badge ${r.subscription_status === 'Premium' ? 'badge-indigo' :
                             r.subscription_status === 'Active' ? 'badge-green' :
-                              r.subscription_status === 'Inactive' ? 'badge-amber' :
-                                'badge-red'
+                              r.subscription_status === 'Inactive' ? 'badge-amber' : 'badge-red'
                           }`}>
                           {r.subscription_status}
                         </span>
                       </td>
-
                       <td>
-                        <span style={{
-                          fontSize: 18, fontWeight: 800, color: cfg.color
-                        }}>
+                        <span style={{ fontSize: 18, fontWeight: 800, color: cfg.color }}>
                           {r.percentage}
                         </span>
                       </td>
-
                       <td>
                         <span className={`badge ${cfg.badgeClass}`}>
                           {cfg.icon} {r.risk_level}
                         </span>
                       </td>
-
-                      {/* Visual risk bar */}
                       <td style={{ minWidth: 100 }}>
                         <div style={{
                           background: 'var(--border)', borderRadius: 999,
-                          height: 8, overflow: 'hidden'
+                          height: 8, overflow: 'hidden',
                         }}>
                           <div style={{
                             width: `${pctNum}%`, height: '100%',
                             background: cfg.color, borderRadius: 999,
-                            transition: 'width 0.4s ease'
+                            transition: 'width 0.4s ease',
                           }} />
                         </div>
-                        <div style={{
-                          fontSize: 10, color: 'var(--text-muted)',
-                          marginTop: 2, textAlign: 'center'
-                        }}>
+                        <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2, textAlign: 'center' }}>
                           {pctNum}%
                         </div>
                       </td>
-
                       <td style={{ fontWeight: 600, color: 'var(--success)' }}>
                         {formatRupee(r.total_spend)}
                       </td>
-
                       <td className="td-muted">{formatDate(r.last_purchase_date)}</td>
-
                       <td style={{ textAlign: 'center' }}>
                         {r.complaints > 0
-                          ? <span style={{ color: 'var(--danger)', fontWeight: 600 }}>
-                            ⚠ {r.complaints}
-                          </span>
+                          ? <span style={{ color: 'var(--danger)', fontWeight: 600 }}>⚠ {r.complaints}</span>
                           : <span style={{ color: 'var(--text-muted)' }}>0</span>
                         }
                       </td>
-
                       <td>
-                        <button className="btn btn-primary btn-sm"
-                          onClick={() => navigate(`/customers/${r.customer_id}`)}>
+                        <button
+                          className="btn btn-primary btn-sm"
+                          onClick={(e) => { e.stopPropagation(); setSelectedRow(r); }}
+                        >
                           View →
                         </button>
                       </td>
@@ -434,6 +505,17 @@ export default function ChurnPage() {
         </div>
 
       </div>
+
+      {/* ── Churn Detail Drawer ── */}
+      <DetailDrawer
+        open={!!selectedRow}
+        onClose={() => setSelectedRow(null)}
+        title={selectedRow?.name || ''}
+        subtitle={`Churn Risk Analysis · ${selectedRow?.customer_id}`}
+        customerId={selectedRow?.customer_id}
+      >
+        <ChurnDrawerContent row={selectedRow} />
+      </DetailDrawer>
     </>
   );
 }

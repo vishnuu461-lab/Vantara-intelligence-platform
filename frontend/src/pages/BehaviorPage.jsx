@@ -15,7 +15,6 @@
 // ============================================================
 
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, PieChart, Pie, Cell, Legend,
@@ -24,6 +23,7 @@ import {
 import Navbar from '../components/layout/Navbar';
 import LoadingSpinner from '../components/common/LoadingSpinner';
 import ErrorMessage from '../components/common/ErrorMessage';
+import DetailDrawer from '../components/common/DetailDrawer';
 import { getCustomers, getBehavior } from '../api/customerApi';
 import { getAnalysisSummary } from '../api/predictionApi';
 
@@ -80,9 +80,122 @@ function formatRupee(v) {
 
 // ── Main Component ─────────────────────────────────────────
 
-export default function BehaviorPage() {
-  const navigate = useNavigate();
+// ── Behavior Drawer Content ───────────────────────────────
 
+const CATEGORY_DOT = {
+  Electronics: '#4f46e5', Clothing: '#ec4899', Furniture: '#f59e0b',
+  Books: '#10b981', Beauty: '#8b5cf6', Sports: '#3b82f6',
+  Food: '#ef4444', Travel: '#06b6d4',
+};
+
+function BehaviorDrawerContent({ row }) {
+  if (!row) return null;
+  const spendColor = CATEGORY_DOT[row.favorite_category] || '#94a3b8';
+  return (
+    <>
+      {/* Spending badge hero */}
+      <div style={{
+        background: '#f8fafc', border: '1px solid #e2e8f0',
+        borderRadius: 12, padding: '18px 20px', marginBottom: 20,
+        display: 'flex', gap: 16, alignItems: 'center',
+      }}>
+        <div style={{ fontSize: 36 }}>
+          {row.spending_level?.includes('Premium') ? '💎' :
+            row.spending_level?.includes('High') ? '💰' :
+              row.spending_level?.includes('Medium') ? '🛒' : '📦'}
+        </div>
+        <div>
+          <div style={{ fontWeight: 700, fontSize: 16 }}>{row.spending_level || '—'}</div>
+          <div style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}>
+            {row.frequency_label} · {row.recency_label}
+          </div>
+        </div>
+      </div>
+
+      {/* Metrics */}
+      <div className="drawer-metrics">
+        <div className="drawer-metric">
+          <div className="drawer-metric-label">Total Spend</div>
+          <div className="drawer-metric-value" style={{ color: '#10b981' }}>
+            ₹{(row.total_spend / 1000).toFixed(1)}K
+          </div>
+        </div>
+        <div className="drawer-metric">
+          <div className="drawer-metric-label">Total Orders</div>
+          <div className="drawer-metric-value">{row.total_orders ?? '—'}</div>
+        </div>
+        <div className="drawer-metric">
+          <div className="drawer-metric-label">Avg Order Value</div>
+          <div className="drawer-metric-value">
+            {row.average_order_value >= 1000
+              ? `₹${(row.average_order_value / 1000).toFixed(1)}K`
+              : `₹${Math.round(row.average_order_value)}`}
+          </div>
+        </div>
+        <div className="drawer-metric">
+          <div className="drawer-metric-label">Orders / Month</div>
+          <div className="drawer-metric-value">{row.purchases_per_month?.toFixed(2) ?? '—'}</div>
+        </div>
+        <div className="drawer-metric">
+          <div className="drawer-metric-label">Days Inactive</div>
+          <div className="drawer-metric-value" style={{
+            color: row.days_since_last > 365 ? '#ef4444' :
+              row.days_since_last > 90 ? '#f59e0b' : '#10b981'
+          }}>
+            {row.days_since_last != null ? `${row.days_since_last}d` : '—'}
+          </div>
+        </div>
+        <div className="drawer-metric">
+          <div className="drawer-metric-label">Site Visits</div>
+          <div className="drawer-metric-value">{row.website_visits ?? '—'}</div>
+        </div>
+      </div>
+
+      {/* Favourite category */}
+      <div className="drawer-section-title">🛍️ Favourite Category</div>
+      <div style={{
+        display: 'inline-flex', alignItems: 'center', gap: 10,
+        padding: '10px 16px', borderRadius: 10, marginBottom: 16,
+        background: spendColor + '18', border: `1px solid ${spendColor}30`,
+      }}>
+        <span style={{
+          width: 10, height: 10, borderRadius: '50%', background: spendColor, flexShrink: 0
+        }} />
+        <span style={{ fontWeight: 700, fontSize: 14, color: spendColor }}>
+          {row.favorite_category || '—'}
+        </span>
+      </div>
+
+      {/* Insight */}
+      {row.insight && (
+        <>
+          <div className="drawer-section-title">💡 Behavioral Insight</div>
+          <div style={{
+            background: '#eff6ff', border: '1px solid #bfdbfe',
+            borderRadius: 8, padding: '14px 16px',
+            fontSize: 13, color: '#1e40af', lineHeight: 1.6,
+          }}>
+            {row.insight}
+          </div>
+        </>
+      )}
+
+      {/* Tags */}
+      <div style={{ marginTop: 16, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+        <span className={`badge ${row.subscription_status === 'Premium' ? 'badge-indigo' :
+          row.subscription_status === 'Active' ? 'badge-green' :
+            row.subscription_status === 'Inactive' ? 'badge-amber' : 'badge-red'
+          }`}>{row.subscription_status}</span>
+        {row.complaints > 0 && (
+          <span className="badge badge-red">⚠ {row.complaints} complaint{row.complaints > 1 ? 's' : ''}</span>
+        )}
+        {row.location && <span className="badge badge-gray">📍 {row.location}</span>}
+      </div>
+    </>
+  );
+}
+
+export default function BehaviorPage() {
   const [summary, setSummary] = useState(null);   // aggregate stats
   const [rows, setRows] = useState([]);     // per-customer behavior
   const [loading, setLoading] = useState(true);
@@ -90,6 +203,7 @@ export default function BehaviorPage() {
   const [error, setError] = useState(null);
   const [search, setSearch] = useState('');
   const [filterSpend, setFilterSpend] = useState('');
+  const [selectedRow, setSelectedRow] = useState(null);
 
   const fetchAll = async () => {
     setLoading(true);
@@ -463,7 +577,10 @@ export default function BehaviorPage() {
               </thead>
               <tbody>
                 {displayedRows.map(r => (
-                  <tr key={r.customer_id}>
+                  <tr key={r.customer_id}
+                    style={{ cursor: 'pointer', background: selectedRow?.customer_id === r.customer_id ? '#f8fafc' : undefined }}
+                    onClick={() => setSelectedRow(r)}
+                  >
 
                     <td>
                       <div style={{ fontWeight: 600 }}>{r.name}</div>
@@ -531,7 +648,7 @@ export default function BehaviorPage() {
 
                     <td>
                       <button className="btn btn-primary btn-sm"
-                        onClick={() => navigate(`/customers/${r.customer_id}`)}>
+                        onClick={(e) => { e.stopPropagation(); setSelectedRow(r); }}>
                         View →
                       </button>
                     </td>
@@ -553,6 +670,17 @@ export default function BehaviorPage() {
         </div>
 
       </div>
+
+      {/* Behavior Detail Drawer */}
+      <DetailDrawer
+        open={!!selectedRow}
+        onClose={() => setSelectedRow(null)}
+        title={selectedRow?.name || ''}
+        subtitle={`Purchase Behavior · ${selectedRow?.customer_id}`}
+        customerId={selectedRow?.customer_id}
+      >
+        <BehaviorDrawerContent row={selectedRow} />
+      </DetailDrawer>
     </>
   );
 }

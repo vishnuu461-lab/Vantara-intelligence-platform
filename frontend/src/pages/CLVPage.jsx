@@ -1,15 +1,12 @@
 ﻿// ============================================================
 // CLVPage.jsx — Customer Lifetime Value Predictions
 // ============================================================
-// Strategy: Same parallel fetch as ChurnPage
-//   Step 1: GET /api/customers?per_page=100
-//   Step 2: Promise.all( GET /api/customers/:id/clv for each )
-//
-// CLV Tiers: Platinum > Gold > Silver > Bronze > Entry
+// Clicking a row opens a CLV-specific detail drawer within
+// this page. Navigation to /customers/:id is only via the
+// explicit "View Full Customer Profile" button in the drawer.
 // ============================================================
 
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
 import {
   PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer,
   BarChart, Bar, XAxis, YAxis, CartesianGrid,
@@ -18,6 +15,7 @@ import {
 import Navbar from '../components/layout/Navbar';
 import LoadingSpinner from '../components/common/LoadingSpinner';
 import ErrorMessage from '../components/common/ErrorMessage';
+import DetailDrawer from '../components/common/DetailDrawer';
 import { getCustomers, getCLVPrediction } from '../api/customerApi';
 
 // ── Tier Config ────────────────────────────────────────────
@@ -34,8 +32,6 @@ function getTierCfg(tier) {
   return TIER_CONFIG[tier] || { color: '#94a3b8', badgeClass: 'badge-gray', icon: '📊', label: tier || '—' };
 }
 
-// ── Helpers ────────────────────────────────────────────────
-
 function formatRupee(v) {
   if (!v && v !== 0) return '—';
   if (v >= 100000) return `₹${(v / 100000).toFixed(1)}L`;
@@ -50,16 +46,168 @@ function formatDate(d) {
   });
 }
 
+// ── CLV Drawer Content ─────────────────────────────────────
+
+function CLVDrawerContent({ row }) {
+  if (!row) return null;
+  const cfg = getTierCfg(row.tier);
+
+  return (
+    <>
+      {/* CLV hero */}
+      <div style={{
+        background: cfg.color + '12',
+        border: `1px solid ${cfg.color}30`,
+        borderRadius: 12, padding: '24px 20px', marginBottom: 20,
+        textAlign: 'center',
+      }}>
+        <div style={{ fontSize: 13, color: cfg.color, fontWeight: 700, marginBottom: 8 }}>
+          {cfg.icon} {row.tier} TIER
+        </div>
+        <div style={{ fontSize: 46, fontWeight: 900, color: cfg.color, lineHeight: 1 }}>
+          {formatRupee(row.predicted_clv)}
+        </div>
+        <div style={{ fontSize: 13, color: '#64748b', marginTop: 6 }}>
+          Estimated Customer Lifetime Value
+        </div>
+        <div style={{
+          fontSize: 11, color: '#94a3b8', marginTop: 4,
+          fontStyle: 'italic'
+        }}>
+          * Analytical estimate — not a guaranteed revenue figure
+        </div>
+      </div>
+
+      {/* Metrics grid */}
+      <div className="drawer-metrics">
+        <div className="drawer-metric">
+          <div className="drawer-metric-label">Current Spend</div>
+          <div className="drawer-metric-value" style={{ color: '#10b981' }}>
+            {formatRupee(row.total_spend)}
+          </div>
+        </div>
+        <div className="drawer-metric">
+          <div className="drawer-metric-label">Total Orders</div>
+          <div className="drawer-metric-value">{row.total_orders ?? '—'}</div>
+        </div>
+        <div className="drawer-metric">
+          <div className="drawer-metric-label">Avg Order Value</div>
+          <div className="drawer-metric-value">{formatRupee(row.average_order_value)}</div>
+        </div>
+        <div className="drawer-metric">
+          <div className="drawer-metric-label">Last Purchase</div>
+          <div className="drawer-metric-value" style={{ fontSize: 13 }}>
+            {formatDate(row.last_purchase_date)}
+          </div>
+        </div>
+      </div>
+
+      {/* CLV context factors */}
+      {row.context && Object.keys(row.context).length > 0 && (
+        <>
+          <div className="drawer-section-title">📊 CLV Factors</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 20 }}>
+            {row.context.orders_per_year != null && (
+              <div style={{
+                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                padding: '8px 12px', background: '#f8fafc', borderRadius: 8,
+                fontSize: 13, border: '1px solid #e2e8f0',
+              }}>
+                <span style={{ color: '#475569' }}>📦 Orders per year</span>
+                <strong>{Number(row.context.orders_per_year).toFixed(1)}</strong>
+              </div>
+            )}
+            {row.context.lifetime_estimate_years != null && (
+              <div style={{
+                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                padding: '8px 12px', background: '#f8fafc', borderRadius: 8,
+                fontSize: 13, border: '1px solid #e2e8f0',
+              }}>
+                <span style={{ color: '#475569' }}>⏳ Estimated lifetime</span>
+                <strong>{row.context.lifetime_estimate_years} years</strong>
+              </div>
+            )}
+            {row.context.recency_factor != null && (
+              <div style={{
+                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                padding: '8px 12px', background: '#f8fafc', borderRadius: 8,
+                fontSize: 13, border: '1px solid #e2e8f0',
+              }}>
+                <span style={{ color: '#475569' }}>🕐 Recency factor</span>
+                <strong style={{ color: row.context.recency_factor >= 1 ? '#10b981' : '#f59e0b' }}>
+                  ×{row.context.recency_factor}
+                </strong>
+              </div>
+            )}
+            {row.context.current_spend_vs_average && (
+              <div style={{
+                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                padding: '8px 12px', background: '#f8fafc', borderRadius: 8,
+                fontSize: 13, border: '1px solid #e2e8f0',
+              }}>
+                <span style={{ color: '#475569' }}>📈 vs Portfolio avg</span>
+                <strong style={{ fontSize: 12 }}>{row.context.current_spend_vs_average}</strong>
+              </div>
+            )}
+            {row.context.days_since_last_purchase != null && (
+              <div style={{
+                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                padding: '8px 12px', background: '#f8fafc', borderRadius: 8,
+                fontSize: 13, border: '1px solid #e2e8f0',
+              }}>
+                <span style={{ color: '#475569' }}>📅 Days since purchase</span>
+                <strong style={{
+                  color: row.context.days_since_last_purchase > 180 ? '#ef4444' :
+                    row.context.days_since_last_purchase > 60 ? '#f59e0b' : '#10b981'
+                }}>
+                  {row.context.days_since_last_purchase}d
+                </strong>
+              </div>
+            )}
+          </div>
+        </>
+      )}
+
+      {/* Recommended action */}
+      {row.action && (
+        <>
+          <div className="drawer-section-title">💡 Recommended Action</div>
+          <div style={{
+            background: cfg.color + '10',
+            border: `1px solid ${cfg.color}30`,
+            borderRadius: 8, padding: '14px 16px',
+            fontSize: 13, color: '#1e293b', lineHeight: 1.6,
+          }}>
+            {row.action}
+          </div>
+        </>
+      )}
+
+      {/* Subscription status */}
+      <div style={{ marginTop: 16, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+        <span className={`badge ${row.subscription_status === 'Premium' ? 'badge-indigo' :
+            row.subscription_status === 'Active' ? 'badge-green' :
+              row.subscription_status === 'Inactive' ? 'badge-amber' : 'badge-red'
+          }`}>
+          {row.subscription_status}
+        </span>
+        {row.location && <span className="badge badge-gray">📍 {row.location}</span>}
+      </div>
+    </>
+  );
+}
+
 // ── Main Component ─────────────────────────────────────────
 
 export default function CLVPage() {
-  const navigate = useNavigate();
-
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [progress, setProgress] = useState('');
   const [error, setError] = useState(null);
   const [filterTier, setFilterTier] = useState('');
+
+  // Drawer state
+  const [selectedRow, setSelectedRow] = useState(null);
 
   const fetchAll = async () => {
     setLoading(true);
@@ -71,8 +219,8 @@ export default function CLVPage() {
       if (!custRes.success) throw new Error('Failed to load customers');
 
       const customers = custRes.customers;
-
       setProgress(`Running CLV model for ${customers.length} customers...`);
+
       const clvResults = await Promise.all(
         customers.map(c =>
           getCLVPrediction(c.customer_id)
@@ -86,14 +234,13 @@ export default function CLVPage() {
         return {
           ...c,
           predicted_clv: clv?.predicted_clv ?? null,
-          formatted: clv?.formatted ?? '—',
-          tier: clv?.tier ?? 'Unknown',
-          action: clv?.action ?? '',
+          formatted: clv?.predicted_clv_formatted ?? '—',
+          tier: clv?.clv_tier ?? clv?.tier ?? 'Unknown',
+          action: clv?.recommended_action ?? clv?.action ?? '',
           context: clv?.context ?? {},
         };
       });
 
-      // Sort: Highest CLV first
       merged.sort((a, b) => (b.predicted_clv ?? 0) - (a.predicted_clv ?? 0));
       setRows(merged);
     } catch (err) {
@@ -106,7 +253,6 @@ export default function CLVPage() {
 
   useEffect(() => { fetchAll(); }, []);
 
-  // ── Loading / Error ─────────────────────────────────────
   if (loading) return (
     <>
       <Navbar pageTitle="Customer Value" pageSubtitle="Predicted lifetime value" />
@@ -123,41 +269,30 @@ export default function CLVPage() {
     </>
   );
 
-  // ── Derived stats ────────────────────────────────────────
-
   const total = rows.length;
   const totalCLV = rows.reduce((s, r) => s + (r.predicted_clv ?? 0), 0);
   const avgCLV = total > 0 ? totalCLV / total : 0;
 
-  // Count per tier
   const tierCounts = {};
-  rows.forEach(r => {
-    tierCounts[r.tier] = (tierCounts[r.tier] || 0) + 1;
-  });
+  rows.forEach(r => { tierCounts[r.tier] = (tierCounts[r.tier] || 0) + 1; });
 
-  // Pie chart
   const pieData = Object.entries(tierCounts).map(([tier, count]) => ({
     name: tier, value: count, color: getTierCfg(tier).color,
   }));
 
-  // Bar chart — top 10 by CLV
   const barData = rows.slice(0, 10).map(r => ({
     name: r.name?.split(' ')[0] || r.customer_id,
-    clv: Math.round((r.predicted_clv ?? 0) / 1000),   // in ₹K
+    clv: Math.round((r.predicted_clv ?? 0) / 1000),
     tier: r.tier,
   }));
 
-  // Filtered rows
-  const displayedRows = filterTier
-    ? rows.filter(r => r.tier === filterTier)
-    : rows;
+  const displayedRows = filterTier ? rows.filter(r => r.tier === filterTier) : rows;
 
-  // ── Render ───────────────────────────────────────────────
   return (
     <>
       <Navbar
         pageTitle="Customer Value"
-        pageSubtitle={`${total} customers · Total portfolio CLV: ${formatRupee(totalCLV)} · Avg: ${formatRupee(avgCLV)}`}
+        pageSubtitle={`${total} customers · Portfolio CLV: ${formatRupee(totalCLV)} · Avg: ${formatRupee(avgCLV)}`}
       />
 
       <div className="page-body">
@@ -166,15 +301,13 @@ export default function CLVPage() {
         <div className="page-header">
           <div>
             <h1>Customer Lifetime Value</h1>
-            <p>Random Forest ML model predicting 12-month revenue per customer</p>
+            <p>Analytical RFM model estimating 12-month revenue per customer</p>
           </div>
           <button className="btn btn-outline btn-sm" onClick={fetchAll}>🔄 Refresh</button>
         </div>
 
-        {/* ── TIER STAT CARDS ── */}
+        {/* TIER STAT CARDS */}
         <div className="stats-grid" style={{ marginBottom: 24 }}>
-
-          {/* Tier cards — clickable to filter */}
           {Object.keys(TIER_CONFIG).map(tier => {
             const cfg = getTierCfg(tier);
             const count = tierCounts[tier] || 0;
@@ -195,8 +328,6 @@ export default function CLVPage() {
               </div>
             );
           })}
-
-          {/* Total portfolio CLV */}
           <div className="stat-card">
             <div className="stat-icon green">💰</div>
             <div className="stat-info">
@@ -207,10 +338,8 @@ export default function CLVPage() {
           </div>
         </div>
 
-        {/* ── CHARTS ── */}
+        {/* CHARTS */}
         <div className="grid-2" style={{ marginBottom: 24 }}>
-
-          {/* Pie: Tier distribution */}
           <div className="card">
             <div className="card-header">
               <div>
@@ -234,12 +363,11 @@ export default function CLVPage() {
             </div>
           </div>
 
-          {/* Bar: Top 10 by CLV */}
           <div className="card">
             <div className="card-header">
               <div>
                 <div className="card-title">Top 10 Highest Value Customers</div>
-                <div className="card-subtitle">Predicted CLV in ₹K (thousands)</div>
+                <div className="card-subtitle">Predicted CLV in ₹K · Click a row for details</div>
               </div>
             </div>
             <div className="card-body">
@@ -258,10 +386,9 @@ export default function CLVPage() {
               </ResponsiveContainer>
             </div>
           </div>
-
         </div>
 
-        {/* ── TABLE ── */}
+        {/* TABLE */}
         <div className="card">
           <div className="card-header">
             <div>
@@ -274,7 +401,9 @@ export default function CLVPage() {
                   </span>
                 )}
               </div>
-              <div className="card-subtitle">Sorted by highest predicted value first</div>
+              <div className="card-subtitle">
+                Click any row to view CLV details · Sorted by highest predicted value first
+              </div>
             </div>
             {filterTier && (
               <button className="btn btn-outline btn-sm" onClick={() => setFilterTier('')}>
@@ -296,8 +425,7 @@ export default function CLVPage() {
                   <th>Current Spend</th>
                   <th>Orders</th>
                   <th>Last Purchase</th>
-                  <th>Recommended Action</th>
-                  <th>Action</th>
+                  <th>Details</th>
                 </tr>
               </thead>
               <tbody>
@@ -307,19 +435,22 @@ export default function CLVPage() {
                   const barPct = Math.round(((r.predicted_clv ?? 0) / maxCLV) * 100);
 
                   return (
-                    <tr key={r.customer_id}>
-
+                    <tr key={r.customer_id}
+                      style={{
+                        cursor: 'pointer',
+                        background: selectedRow?.customer_id === r.customer_id
+                          ? cfg.color + '0d' : undefined,
+                      }}
+                      onClick={() => setSelectedRow(r)}
+                    >
                       <td style={{ color: 'var(--text-muted)', fontWeight: 600, fontSize: 13 }}>
                         {index + 1}
                       </td>
-
                       <td>
                         <div style={{ fontWeight: 600 }}>{r.name}</div>
                         <div className="td-muted" style={{ fontSize: 11 }}>{r.customer_id}</div>
                       </td>
-
                       <td className="td-muted">📍 {r.location || '—'}</td>
-
                       <td>
                         <span className={`badge ${r.subscription_status === 'Premium' ? 'badge-indigo' :
                             r.subscription_status === 'Active' ? 'badge-green' :
@@ -328,12 +459,10 @@ export default function CLVPage() {
                           {r.subscription_status}
                         </span>
                       </td>
-
                       <td>
                         <div style={{ fontSize: 16, fontWeight: 800, color: cfg.color }}>
                           {formatRupee(r.predicted_clv)}
                         </div>
-                        {/* CLV bar relative to highest */}
                         <div style={{
                           background: 'var(--border)', borderRadius: 999,
                           height: 4, width: 80, marginTop: 4, overflow: 'hidden'
@@ -344,37 +473,26 @@ export default function CLVPage() {
                           }} />
                         </div>
                       </td>
-
                       <td>
                         <span className={`badge ${cfg.badgeClass}`} style={{ fontSize: 13 }}>
                           {cfg.icon} {r.tier}
                         </span>
                       </td>
-
                       <td style={{ fontWeight: 600, color: 'var(--success)' }}>
                         {formatRupee(r.total_spend)}
                       </td>
-
                       <td style={{ textAlign: 'center', fontWeight: 600 }}>
                         {r.total_orders ?? '—'}
                       </td>
-
                       <td className="td-muted">{formatDate(r.last_purchase_date)}</td>
-
-                      <td style={{
-                        fontSize: 11, color: 'var(--text-secondary)',
-                        maxWidth: 200, lineHeight: 1.4
-                      }}>
-                        {r.action || '—'}
-                      </td>
-
                       <td>
-                        <button className="btn btn-primary btn-sm"
-                          onClick={() => navigate(`/customers/${r.customer_id}`)}>
+                        <button
+                          className="btn btn-primary btn-sm"
+                          onClick={(e) => { e.stopPropagation(); setSelectedRow(r); }}
+                        >
                           View →
                         </button>
                       </td>
-
                     </tr>
                   );
                 })}
@@ -391,11 +509,22 @@ export default function CLVPage() {
               Showing {displayedRows.length} of {total} customers
               {filterTier ? ` · Filtered: ${filterTier} tier` : ''}
             </span>
-            <span>Random Forest Regressor · 12-month CLV estimate · Flask ML backend</span>
+            <span>Analytical CLV Formula (RFM-based) · Flask backend</span>
           </div>
         </div>
 
       </div>
+
+      {/* CLV Detail Drawer */}
+      <DetailDrawer
+        open={!!selectedRow}
+        onClose={() => setSelectedRow(null)}
+        title={selectedRow?.name || ''}
+        subtitle={`Customer Lifetime Value · ${selectedRow?.customer_id}`}
+        customerId={selectedRow?.customer_id}
+      >
+        <CLVDrawerContent row={selectedRow} />
+      </DetailDrawer>
     </>
   );
 }

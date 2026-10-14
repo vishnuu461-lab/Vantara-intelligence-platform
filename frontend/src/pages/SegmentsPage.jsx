@@ -14,7 +14,6 @@
 // ============================================================
 
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
 import {
   PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer
 } from 'recharts';
@@ -22,6 +21,7 @@ import {
 import Navbar from '../components/layout/Navbar';
 import LoadingSpinner from '../components/common/LoadingSpinner';
 import ErrorMessage from '../components/common/ErrorMessage';
+import DetailDrawer from '../components/common/DetailDrawer';
 import { getAllSegments } from '../api/predictionApi';
 
 // ── Segment configuration ─────────────────────────────────
@@ -76,12 +76,11 @@ function formatDate(d) {
 // ── Main Component ─────────────────────────────────────────
 
 export default function SegmentsPage() {
-  const navigate = useNavigate();
-
   const [segData, setSegData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [activeTab, setActiveTab] = useState(null); // set after data loads
+  const [activeTab, setActiveTab] = useState(null);
+  const [selectedCustomer, setSelectedCustomer] = useState(null);
 
   const fetchData = async () => {
     setLoading(true);
@@ -326,9 +325,9 @@ export default function SegmentsPage() {
                       <td className="td-muted">📍 {c.location || '—'}</td>
                       <td>
                         <span className={`badge ${c.subscription_status === 'Premium' ? 'badge-indigo' :
-                            c.subscription_status === 'Active' ? 'badge-green' :
-                              c.subscription_status === 'Inactive' ? 'badge-amber' :
-                                'badge-red'
+                          c.subscription_status === 'Active' ? 'badge-green' :
+                            c.subscription_status === 'Inactive' ? 'badge-amber' :
+                              'badge-red'
                           }`}>
                           {c.subscription_status}
                         </span>
@@ -352,7 +351,7 @@ export default function SegmentsPage() {
                       <td>
                         <button
                           className="btn btn-primary btn-sm"
-                          onClick={() => navigate(`/customers/${c.customer_id}`)}
+                          onClick={(e) => { e.stopPropagation(); setSelectedCustomer({ ...c, segment: activeTab }); }}
                         >
                           View →
                         </button>
@@ -376,6 +375,94 @@ export default function SegmentsPage() {
 
         </div>
       </div>
+
+      {/* Segment Customer Drawer */}
+      <DetailDrawer
+        open={!!selectedCustomer}
+        onClose={() => setSelectedCustomer(null)}
+        title={selectedCustomer?.name || ''}
+        subtitle={`${selectedCustomer?.segment} Segment · ${selectedCustomer?.customer_id}`}
+        customerId={selectedCustomer?.customer_id}
+      >
+        {selectedCustomer && (
+          <>
+            {/* Segment badge */}
+            <div style={{
+              background: getSegConfig(selectedCustomer.segment).color + '12',
+              border: `1px solid ${getSegConfig(selectedCustomer.segment).color}30`,
+              borderRadius: 12, padding: '16px 20px', marginBottom: 20,
+              display: 'flex', alignItems: 'center', gap: 14,
+            }}>
+              <span style={{ fontSize: 32 }}>{getSegConfig(selectedCustomer.segment).icon}</span>
+              <div>
+                <div style={{ fontWeight: 700, fontSize: 15, color: getSegConfig(selectedCustomer.segment).color }}>
+                  {selectedCustomer.segment}
+                </div>
+                <div style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}>
+                  {getSegConfig(selectedCustomer.segment).desc}
+                </div>
+              </div>
+            </div>
+
+            {/* Metrics */}
+            <div className="drawer-metrics">
+              <div className="drawer-metric">
+                <div className="drawer-metric-label">Total Spend</div>
+                <div className="drawer-metric-value" style={{ color: '#10b981' }}>
+                  {selectedCustomer.total_spend >= 100000
+                    ? `₹${(selectedCustomer.total_spend / 100000).toFixed(1)}L`
+                    : selectedCustomer.total_spend >= 1000
+                      ? `₹${(selectedCustomer.total_spend / 1000).toFixed(1)}K`
+                      : `₹${Math.round(selectedCustomer.total_spend || 0)}`}
+                </div>
+              </div>
+              <div className="drawer-metric">
+                <div className="drawer-metric-label">Total Orders</div>
+                <div className="drawer-metric-value">{selectedCustomer.total_orders ?? '—'}</div>
+              </div>
+              <div className="drawer-metric">
+                <div className="drawer-metric-label">Last Purchase</div>
+                <div className="drawer-metric-value" style={{ fontSize: 12 }}>
+                  {selectedCustomer.last_purchase_date
+                    ? new Date(selectedCustomer.last_purchase_date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
+                    : '—'}
+                </div>
+              </div>
+              <div className="drawer-metric">
+                <div className="drawer-metric-label">Complaints</div>
+                <div className="drawer-metric-value" style={{ color: selectedCustomer.complaints > 0 ? '#ef4444' : '#10b981' }}>
+                  {selectedCustomer.complaints > 0 ? `⚠ ${selectedCustomer.complaints}` : '✓ None'}
+                </div>
+              </div>
+            </div>
+
+            {/* Segment reason */}
+            {selectedCustomer.segment_reason && (
+              <>
+                <div className="drawer-section-title">📌 Why this segment?</div>
+                <div style={{
+                  background: '#f8fafc', border: '1px solid #e2e8f0',
+                  borderRadius: 8, padding: '12px 14px',
+                  fontSize: 13, color: '#475569', lineHeight: 1.6,
+                }}>
+                  {selectedCustomer.segment_reason}
+                </div>
+              </>
+            )}
+
+            {/* Tags */}
+            <div style={{ marginTop: 16, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              <span className={`badge ${selectedCustomer.subscription_status === 'Premium' ? 'badge-indigo' :
+                  selectedCustomer.subscription_status === 'Active' ? 'badge-green' :
+                    selectedCustomer.subscription_status === 'Inactive' ? 'badge-amber' : 'badge-red'
+                }`}>{selectedCustomer.subscription_status}</span>
+              {selectedCustomer.location && (
+                <span className="badge badge-gray">📍 {selectedCustomer.location}</span>
+              )}
+            </div>
+          </>
+        )}
+      </DetailDrawer>
     </>
   );
 }
